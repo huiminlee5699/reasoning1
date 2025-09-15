@@ -143,66 +143,60 @@
             line-height: 1.6;
         }
 
-        .thinking-container {
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            background-color: white;
-            margin-bottom: 16px;
-            overflow: hidden;
-        }
-
-        .thinking-header {
-            padding: 16px 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+        .current-header {
+            padding: 8px 0;
             font-weight: 500;
-            background-color: #fafafa;
-            border-bottom: 1px solid #e5e7eb;
-            user-select: none;
-            transition: background-color 0.2s;
+            color: #374151;
+            font-size: 14px;
+            margin-bottom: 8px;
+            animation: headerBlink 1.5s infinite;
         }
 
-        .thinking-header:hover {
-            background-color: #f0f0f0;
+        @keyframes headerBlink {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
         }
 
-        .thinking-header.completed {
-            background-color: #f0f9f4;
-            color: #059669;
-            border-bottom: 1px solid #d1fae5;
+        .content-chunk {
+            margin-bottom: 20px;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
         }
 
-        .thinking-title {
+        .content-chunk:hover {
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        .content-chunk.collapsed .chunk-content {
+            display: none;
+        }
+
+        .chunk-header {
+            font-weight: 500;
+            color: #374151;
+            font-size: 13px;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 13px;
-            color: #374151;
         }
 
-        .thinking-status {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background-color: #9ca3af;
-            animation: pulse 1.5s infinite;
-        }
-
-        .thinking-status.completed {
-            background-color: #059669;
-            animation: none;
-        }
-
-        .thinking-chevron {
+        .chunk-chevron {
             transition: transform 0.2s;
             color: #9ca3af;
             font-size: 12px;
         }
 
-        .thinking-chevron.expanded {
+        .chunk-chevron.expanded {
             transform: rotate(180deg);
+        }
+
+        // Remove old unused styles
+        .thinking-title,
+        .thinking-status,
+        .thinking-chevron {
+            display: none;
         }
 
         @keyframes pulse {
@@ -210,55 +204,59 @@
             50% { opacity: 1; transform: scale(1.1); }
         }
 
-        .thinking-content {
-            padding: 20px;
-            display: none;
+        .chunk-content {
+            padding: 8px 0;
             line-height: 1.6;
         }
 
-        .thinking-content.expanded {
-            display: block;
-        }
-
-        .thinking-content p {
-            margin-bottom: 16px;
+        .chunk-content p {
+            margin-bottom: 12px;
             color: #374151;
+            font-size: 14px;
         }
 
-        .thinking-content p:last-child {
-            margin-bottom: 0;
+        .chunk-content p:last-child {
+            margin-bottom: 8px;
         }
 
         .search-links {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #e5e7eb;
+            gap: 6px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e0e7f3;
         }
 
         .search-link {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
-            background-color: #f3f4f6;
-            border-radius: 12px;
+            gap: 3px;
+            padding: 2px 6px;
+            background-color: transparent;
+            border-radius: 8px;
             text-decoration: none;
-            color: #6b7280;
-            font-size: 12px;
+            color: #1e73e8;
+            font-size: 11px;
             transition: background-color 0.2s;
         }
 
         .search-link:hover {
-            background-color: #e5e7eb;
-            color: #374151;
+            background-color: rgba(30, 115, 232, 0.1);
+            text-decoration: underline;
         }
 
         .search-link::before {
-            content: "🔗";
-            font-size: 10px;
+            content: "🌐";
+            font-size: 9px;
+        }
+
+        .final-timing {
+            padding: 8px 0;
+            font-weight: 500;
+            color: #374151;
+            font-size: 14px;
+            margin-bottom: 16px;
         }
 
         .final-answer {
@@ -301,19 +299,21 @@
         }
 
         .skip-button {
-            background-color: #f3f4f6;
-            border: 1px solid #d1d5db;
-            color: #374151;
-            padding: 8px 16px;
-            border-radius: 6px;
+            background-color: transparent;
+            border: none;
+            color: #1e73e8;
+            padding: 4px 8px;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
-            margin-top: 12px;
+            font-size: 13px;
+            margin-top: 8px;
+            margin-bottom: 8px;
             transition: background-color 0.2s;
+            text-decoration: underline;
         }
 
         .skip-button:hover {
-            background-color: #e5e7eb;
+            background-color: rgba(30, 115, 232, 0.1);
         }
 
         .input-container {
@@ -763,47 +763,14 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        function createThinkingSection(title, isActive = false, isCompleted = false) {
-            const container = document.createElement('div');
-            container.className = 'thinking-container';
-            
-            const header = document.createElement('div');
-            header.className = `thinking-header ${isCompleted ? 'completed' : ''}`;
-            
-            const titleDiv = document.createElement('div');
-            titleDiv.className = 'thinking-title';
-            
-            const status = document.createElement('div');
-            status.className = `thinking-status ${isCompleted ? 'completed' : ''}`;
-            
-            const titleSpan = document.createElement('span');
-            titleSpan.textContent = title;
-            
-            const chevron = document.createElement('div');
-            chevron.className = `thinking-chevron ${isActive ? 'expanded' : ''}`;
-            chevron.innerHTML = '▼';
-            
-            titleDiv.appendChild(status);
-            titleDiv.appendChild(titleSpan);
-            header.appendChild(titleDiv);
-            header.appendChild(chevron);
-            
-            const content = document.createElement('div');
-            content.className = `thinking-content ${isActive ? 'expanded' : ''}`;
-            
-            container.appendChild(header);
-            container.appendChild(content);
-            
-            header.addEventListener('click', () => {
-                content.classList.toggle('expanded');
-                chevron.classList.toggle('expanded');
-            });
-            
-            return { container, content, header, status, chevron };
-        }
+        function createContentChunk(_title, content, links = null) {
+            const chunk = document.createElement('div');
+            chunk.className = 'content-chunk';
 
-        function addThinkingContentWithLinks(contentDiv, items, links = null) {
-            items.forEach(item => {
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'chunk-content';
+
+            content.forEach(item => {
                 const p = document.createElement('p');
                 p.textContent = item;
                 contentDiv.appendChild(p);
@@ -824,6 +791,122 @@
                 
                 contentDiv.appendChild(linksContainer);
             }
+
+            chunk.appendChild(contentDiv);
+
+            // Toggle collapse by clicking anywhere on the chunk
+            chunk.addEventListener('click', () => {
+                chunk.classList.toggle('collapsed');
+            });
+
+            return chunk;
+        }
+
+        async function showProgressiveReasoningProcess(prompt) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+            
+            const avatar = document.createElement('div');
+            avatar.className = 'avatar assistant-avatar';
+            avatar.textContent = 'AI';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(messageContent);
+            chatContainer.appendChild(messageDiv);
+            
+            // Create header area and skip button
+            const headerArea = document.createElement('div');
+            headerArea.className = 'current-header';
+            messageContent.appendChild(headerArea);
+            
+            let skipped = false;
+            const skipButton = createSkipButton(() => {
+                skipped = true;
+            });
+            messageContent.appendChild(skipButton);
+            
+            const contentArea = document.createElement('div');
+            messageContent.appendChild(contentArea);
+            
+            // Process each reasoning step
+            for (let i = 0; i < travelReasoningSteps.length; i++) {
+                const step = travelReasoningSteps[i];
+                
+                if (skipped) break;
+                
+                // Show current header with blinking
+                headerArea.textContent = step.title;
+                headerArea.style.display = 'block';
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                
+                // Wait for header to be visible
+                await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+                
+                if (!skipped) {
+                    // Create and add content chunk (without header)
+                    const chunk = createContentChunk(step.title, step.content, step.links);
+                    contentArea.appendChild(chunk);
+                    
+                    // Hide current header
+                    headerArea.style.display = 'none';
+                    
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    
+                    // Wait before next step
+                    if (i < travelReasoningSteps.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+                    }
+                }
+            }
+            
+            // Show final timing and remove skip button
+            const totalTime = Math.floor(Math.random() * 30) + 15; // 15-45 seconds
+            headerArea.textContent = `Thought for ${totalTime}s`;
+            headerArea.className = 'final-timing';
+            headerArea.style.display = 'block';
+            skipButton.remove();
+            
+            // Wait a moment before final answer
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Show final answer
+            const finalAnswerDiv = document.createElement('div');
+            finalAnswerDiv.className = 'final-answer';
+            messageContent.appendChild(finalAnswerDiv);
+            
+            const responseText = generateResponse(prompt);
+            await typeText(finalAnswerDiv, responseText);
+            
+            // Add action buttons
+            const actionButtons = document.createElement('div');
+            actionButtons.className = 'action-buttons';
+            actionButtons.innerHTML = `
+                <button class="action-btn">📋</button>
+                <button class="action-btn">👍</button>
+                <button class="action-btn">👎</button>
+                <button class="action-btn">↗️</button>
+                <button class="action-btn">🔄</button>
+                <button class="action-btn">⋯</button>
+            `;
+            messageContent.appendChild(actionButtons);
+            
+            // Add feedback bar
+            const feedbackBar = document.createElement('div');
+            feedbackBar.className = 'feedback-bar';
+            feedbackBar.innerHTML = `
+                <span>Is this conversation helpful so far?</span>
+                <div class="feedback-buttons">
+                    <button class="feedback-btn">👍</button>
+                    <button class="feedback-btn">👎</button>
+                    <button class="feedback-btn">✕</button>
+                </div>
+            `;
+            messageContent.appendChild(feedbackBar);
+            
+            chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
         function createSkipButton(callback) {
@@ -1078,8 +1161,8 @@ If you tell me your departure city and whether you're traveling solo or with som
             messageInput.value = '';
             autoResize();
 
-            // Show detailed reasoning process
-            await showDetailedReasoningProcess(userPrompt);
+            // Show progressive reasoning process
+            await showProgressiveReasoningProcess(userPrompt);
             
             isProcessing = false;
             updateSendButton();
