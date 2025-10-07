@@ -157,100 +157,6 @@
             50% { opacity: 1; }
         }
 
-        .content-chunk {
-            margin-bottom: 0; /* remove extra gap between chunks */
-            padding: 12px 0;
-            border-bottom: 1px solid #f0f0f0;
-            cursor: pointer;
-        }
-
-        .content-chunk:hover {
-            background-color: rgba(0, 0, 0, 0.02);
-        }
-
-        .content-chunk.collapsed .chunk-content {
-            display: none;
-        }
-
-        .chunk-header {
-            font-weight: 500;
-            color: #374151;
-            font-size: 13px;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .chunk-chevron {
-            transition: transform 0.2s;
-            color: #9ca3af;
-            font-size: 12px;
-        }
-
-        .chunk-chevron.expanded {
-            transform: rotate(180deg);
-        }
-
-        // Remove old unused styles
-        .thinking-title,
-        .thinking-status,
-        .thinking-chevron {
-            display: none;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 0.4; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.1); }
-        }
-
-        .chunk-content {
-            padding: 8px 0;
-            line-height: 1.6;
-        }
-
-        .chunk-content p {
-            margin-bottom: 8px;
-            color: #374151;
-            font-size: 14px;
-        }
-
-        .chunk-content p:last-child {
-            margin-bottom: 0; /* trim trailing space inside each chunk */
-        }
-
-        .search-links {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid #e0e7f3;
-        }
-
-        .search-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 3px;
-            padding: 2px 6px;
-            background-color: transparent;
-            border-radius: 8px;
-            text-decoration: none;
-            color: #1e73e8;
-            font-size: 11px;
-            transition: background-color 0.2s;
-        }
-
-        .search-link:hover {
-            background-color: rgba(30, 115, 232, 0.1);
-            text-decoration: underline;
-        }
-
-        .search-link::before {
-            content: "🌐";
-            font-size: 9px;
-        }
-
         .final-timing {
             padding: 8px 0;
             font-weight: 500;
@@ -298,22 +204,12 @@
             color: #111827;
         }
 
-        .skip-button {
-            background-color: transparent;
-            border: none;
-            color: #1e73e8;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
+        .error-message {
+            color: #dc2626;
+            padding: 12px;
+            background-color: #fee2e2;
+            border-radius: 8px;
             margin-top: 8px;
-            margin-bottom: 8px;
-            transition: background-color 0.2s;
-            text-decoration: underline;
-        }
-
-        .skip-button:hover {
-            background-color: rgba(30, 115, 232, 0.1);
         }
 
         .input-container {
@@ -570,177 +466,9 @@
         let uploadedFile = null;
         let isProcessing = false;
 
-        // Detailed travel reasoning content with specific headers and links
-        const travelReasoningSteps = [
-            {
-                title: "Planning travel options",
-                content: ["I need to compare Japan and Greece for a 6-day trip with a $2000 budget. I'll look at factors like flight costs, currency exchange, and entry requirements. Since the user's timezone is America/New_York, I'll check typical airfare from an East Coast city like NYC or Philadelphia. I'll gather flight price ranges for Tokyo and Athens."],
-                hasLinks: false
-            },
-            {
-                title: "Checking costs and logistics",
-                content: ["I'm looking at on-the-ground costs, including daily budgets, lodging, transit passes, and entry tickets for Japan and Greece. Japan might be more expensive from the East Coast, though the weaker JPY could balance out costs. I'll consider exchange rates and language barriers, as both countries offer different levels of English proficiency."],
-                hasLinks: false
-            },
-            {
-                title: "Considering travel timing and feasibility",
-                content: ["I need to account for April weather—cherry blossoms in Japan and mild conditions in Greece, though Easter in Greece might bring some closures. Strikes could also be a factor. With a $2000 budget, Greece seems more feasible for six days, considering cheaper flights and less of a language barrier."],
-                hasLinks: false
-            },
-            {
-                title: "Browsing airfare, travel costs, and language for Japan/Greece",
-                content: ["I need to check current flight prices and travel costs for both destinations to provide accurate budget estimates."],
-                hasLinks: true,
-                links: [
-                    { text: "www.skyscanner.com", url: "https://www.skyscanner.com" },
-                    { text: "www.kayak.com", url: "https://www.kayak.com" },
-                    { text: "www.google.com/travel", url: "https://www.google.com/travel" },
-                    { text: "www.expedia.com", url: "https://www.expedia.com" }
-                ]
-            },
-            {
-                title: "Exploring flight sources",
-                content: ["I need to ensure the sources are reliable since websites like Expedia and Skyscanner sometimes show teaser fares, which might be misleading. I could look up typical fare ranges using tools like Google Flights, and I'll open a Google Travel page to check out the average price for flights from NYC to Tokyo and Athens."],
-                hasLinks: true,
-                links: [
-                    { text: "flights.google.com", url: "https://flights.google.com" },
-                    { text: "www.momondo.com", url: "https://www.momondo.com" },
-                    { text: "www.priceline.com", url: "https://www.priceline.com" }
-                ]
-            },
-            {
-                title: "Reviewing flight pricing sources and typical price ranges",
-                content: ["Since Google Flights doesn't yield easy-to-scrape results, I'll check Kayak for their price trend pages. I'll look up the price forecast from NYC to Tokyo in April to get a sense of typical airfare. This could give me a better estimate of prices."],
-                hasLinks: false
-            },
-            {
-                title: "Searching Kayak price trends and flight information",
-                content: ["Flight prices might be a bit messy, so I'll provide rough estimates with disclaimers. I'll also note the visa requirements—both Greece and Japan allow US citizens to stay visa-free for up to 90 days. Weather-wise, Tokyo's highs are around 18°C with cherry blossoms in early April, while Athens is a bit warmer at 20°C. I'll cite reliable weather sources."],
-                hasLinks: true,
-                links: [
-                    { text: "www.kayak.com/price-trends", url: "https://www.kayak.com/price-trends" },
-                    { text: "www.farecompare.com", url: "https://www.farecompare.com" },
-                    { text: "www.airfarewatchdog.com", url: "https://www.airfarewatchdog.com" }
-                ]
-            },
-            {
-                title: "Searching weather and cherry blossom data for April",
-                content: ["For Greece, I'd suggest Athens, including day trips to Delphi, Epidaurus, and Mycenae, plus an island visit to Hydra or Aegina. In Japan, a 6-day trip to Tokyo and Kyoto by shinkansen could work, though transportation costs are a consideration. I'll verify shinkansen fares and exchange rates."],
-                hasLinks: true,
-                links: [
-                    { text: "weather.com", url: "https://weather.com" },
-                    { text: "www.jma.go.jp", url: "https://www.jma.go.jp" },
-                    { text: "www.sakura.weathermap.jp", url: "https://sakura.weathermap.jp" },
-                    { text: "www.timeanddate.com", url: "https://www.timeanddate.com" }
-                ]
-            },
-            {
-                title: "Searching for travel prices for Japan and Greece",
-                content: ["For Greece, I'd recommend food tours featuring souvlaki, meze, and exploring markets like Varvakios Agora. In Tokyo, you could visit Tsukiji's outer market, depachika, and izakaya alleys. As for the language barrier, signage in Tokyo's metro might be helpful, so I'll check the English signage page for the metro."],
-                hasLinks: true,
-                links: [
-                    { text: "www.budgetyourtrip.com", url: "https://www.budgetyourtrip.com" },
-                    { text: "www.numbeo.com", url: "https://www.numbeo.com" },
-                    { text: "www.priceoftravel.com", url: "https://www.priceoftravel.com" }
-                ]
-            },
-            {
-                title: "Searching food tours and metro signage in Athens, Tokyo",
-                content: ["For credibility, I'll rely on the official Tokyo Metro and 'This is Athens' websites for signage info. An Asahi Shimbun article is also a good source. Regarding the budget, I'll estimate for a roundtrip flight, lodging, food, transit, and admissions. Using NYC as a baseline, airfare to Athens generally ranges from $500–900, while to Tokyo, it's $900–1,300."],
-                hasLinks: true,
-                links: [
-                    { text: "www.tokyometro.jp/en", url: "https://www.tokyometro.jp/en" },
-                    { text: "www.thisisathens.org", url: "https://www.thisisathens.org" },
-                    { text: "www.getyourguide.com", url: "https://www.getyourguide.com" },
-                    { text: "www.viator.com", url: "https://www.viator.com" }
-                ]
-            },
-            {
-                title: "Evaluating credibility and estimating travel costs",
-                content: ["We have the Japan airfare estimate of $1,188 for round-trip flights April–June. For Athens, we can say $600–900 for April NYC–Athens flights, based on general trends. I will note that flight prices for Athens remain variable but will use KAYAK and Skyscanner data for a reasonable comparison."],
-                hasLinks: false
-            },
-            {
-                title: "Searching for 2025 airfare outlooks and flight prices",
-                content: ["I have a solid estimate for Japan airfare around $1,188 in spring 2025. For Europe, fares might be cheaper based on a Reuters article suggesting a 7% drop in Q1. Hotel costs: in Japan, the average rate is ¥19,381 ($170), while in Greece, April being shoulder season should mean lower hotel prices, so I'll verify that for Athens."],
-                hasLinks: true,
-                links: [
-                    { text: "www.reuters.com", url: "https://www.reuters.com" },
-                    { text: "www.bloomberg.com", url: "https://www.bloomberg.com" },
-                    { text: "www.travelweekly.com", url: "https://www.travelweekly.com" }
-                ]
-            },
-            {
-                title: "Searching airfare and hotel prices for Japan and Greece",
-                content: ["For attractions in Tokyo: places like Senso-ji and Meiji Shrine are free, while the Tokyo National Museum costs ¥1,000, and Kyoto temples range from ¥400–1,000. In Athens, the Acropolis is €30, and the Acropolis Museum has an entry fee of €15 (I'll confirm the 2025 prices)."],
-                hasLinks: true,
-                links: [
-                    { text: "www.booking.com", url: "https://www.booking.com" },
-                    { text: "www.hotels.com", url: "https://www.hotels.com" },
-                    { text: "www.agoda.com", url: "https://www.agoda.com" },
-                    { text: "www.hostelworld.com", url: "https://www.hostelworld.com" }
-                ]
-            },
-            {
-                title: "Searching for 2025 ticket prices for attractions",
-                content: ["I'll refer to the EF EPI rankings to address language barriers. Japan is ranked as 'low proficiency' in 2024, while Greece is rated 'high' or 'moderate to high'. I'll check the EF pages for both countries to get the most current details."],
-                hasLinks: true,
-                links: [
-                    { text: "www.odysseus.culture.gr", url: "https://www.odysseus.culture.gr" },
-                    { text: "www.tnm.jp/modules/r_free_page/index.php?id=113", url: "https://www.tnm.jp" },
-                    { text: "www.tripadvisor.com", url: "https://www.tripadvisor.com" }
-                ]
-            },
-            {
-                title: "Searching EF EPI English proficiency rankings for Japan and Greece",
-                content: ["The EF page confirms that Athens has very high proficiency in English, which suggests a lower language barrier in Greece. I should also mention the new Greek climate tax for 2025—Reuters offers a reliable source here. I'll mention transport with Tokyo IC cards like Suica/PASMO, including the Welcome Suica for tourists."],
-                hasLinks: true,
-                links: [
-                    { text: "www.ef.com/epi", url: "https://www.ef.com/epi" },
-                    { text: "www.ethnologue.com", url: "https://www.ethnologue.com" }
-                ]
-            },
-            {
-                title: "Searching for Tokyo transport pass details and pricing",
-                content: ["For Greece, I can suggest ferry day trips to Hydra or Aegina. These are popular islands easily accessible by ferry. I'll need to check the ferry costs to ensure I provide accurate pricing information for these trips."],
-                hasLinks: true,
-                links: [
-                    { text: "www.jreast.co.jp/multi/en/pass", url: "https://www.jreast.co.jp/multi/en/pass" },
-                    { text: "www.tokyometro.jp/en/ticket", url: "https://www.tokyometro.jp/en/ticket" },
-                    { text: "www.hyperdia.com", url: "https://www.hyperdia.com" }
-                ]
-            },
-            {
-                title: "Searching ferry prices for day trips to Hydra and Aegina",
-                content: ["Tabloid sources, like The Sun, aren't the best for solid info, so I'll mostly avoid them, using them only for extra context. For ferry prices, I'll rely on Ferryhopper and Direct Ferries. I also need to compare food prices in Greece and Japan, so I'll look up Numbeo or BudgetYourTrip for that."],
-                hasLinks: true,
-                links: [
-                    { text: "www.ferryhopper.com", url: "https://www.ferryhopper.com" },
-                    { text: "www.directferries.com", url: "https://www.directferries.com" },
-                    { text: "www.openseas.gr", url: "https://www.openseas.gr" }
-                ]
-            },
-            {
-                title: "Searching food costs in Greece and Japan",
-                content: ["For Japan, a 6-day stay could be a bit tight if trying Tokyo and an overnight in Kyoto/Osaka. I'd recommend focusing on Tokyo with a day trip to either Kamakura or Nikko instead. For Greece, a 3-day Athens stay plus day trips to Nafplio, Mycenae, and Aegina or Hydra would be a well-paced itinerary. Considering budget and language, I'd suggest Greece due to lower flight costs and high English proficiency. I'll provide both itineraries with realistic budgets."],
-                hasLinks: true,
-                links: [
-                    { text: "www.numbeo.com/food-prices", url: "https://www.numbeo.com/food-prices" },
-                    { text: "www.budgetyourtrip.com", url: "https://www.budgetyourtrip.com" },
-                    { text: "www.expatistan.com", url: "https://www.expatistan.com" }
-                ]
-            },
-            {
-                title: "Assembling a travel budget for 6 days in Greece",
-                content: ["I'll provide a final recommendation and itinerary with a simple list and compact budget table. I'll start with a recommendation: choose Greece for 6 days on a $2k budget. Flight is cheaper, English is widely spoken, and it's a dense historical hub. For the budget breakdown, I'll mention flights from $700–$1k based on US-Europe fare trends, lodging around $120 per night, and daily food at $25–40."],
-                hasLinks: false
-            },
-            {
-                title: "Comparing Greece and Japan travel budgets",
-                content: ["For the Acropolis, the entry fee is €30 per site as of April 2025. As for the Acropolis Museum, the ticket price is about €15, according to a quick check. I'll include these details without getting too bogged down in exact numbers."],
-                hasLinks: false
-            }
-        ];
+        // Define the exact prompts
+        const SAN_DIEGO_PROMPT = "Plan a weekend trip to San Diego for two people, including accommodation recommendations, must-see attractions, and dining options. Consider a budget of $800 total.";
+        const REMOTE_WORK_PROMPT = "Research current remote work trends and write a brief summary report that I can share with my manager about how companies are handling flexible work policies.";
 
         function updateSendButton() {
             const hasText = messageInput.value.trim().length > 0;
@@ -761,160 +489,6 @@
             
             chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        function createContentChunk(_title, content, links = null) {
-            const chunk = document.createElement('div');
-            chunk.className = 'content-chunk';
-
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'chunk-content';
-
-            content.forEach(item => {
-                const p = document.createElement('p');
-                p.textContent = item;
-                contentDiv.appendChild(p);
-            });
-
-            if (links && links.length > 0) {
-                const linksContainer = document.createElement('div');
-                linksContainer.className = 'search-links';
-                
-                links.forEach(link => {
-                    const linkElement = document.createElement('a');
-                    linkElement.className = 'search-link';
-                    linkElement.href = link.url;
-                    linkElement.target = '_blank';
-                    linkElement.textContent = link.text;
-                    linksContainer.appendChild(linkElement);
-                });
-                
-                contentDiv.appendChild(linksContainer);
-            }
-
-            chunk.appendChild(contentDiv);
-
-            // Toggle collapse by clicking anywhere on the chunk
-            chunk.addEventListener('click', () => {
-                chunk.classList.toggle('collapsed');
-            });
-
-            return chunk;
-        }
-
-        async function showProgressiveReasoningProcess(prompt) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'message assistant';
-            
-            const avatar = document.createElement('div');
-            avatar.className = 'avatar assistant-avatar';
-            avatar.textContent = 'AI';
-            
-            const messageContent = document.createElement('div');
-            messageContent.className = 'message-content';
-            
-            messageDiv.appendChild(avatar);
-            messageDiv.appendChild(messageContent);
-            chatContainer.appendChild(messageDiv);
-            
-            // Create header area and skip button
-            const headerArea = document.createElement('div');
-            headerArea.className = 'current-header';
-            messageContent.appendChild(headerArea);
-            
-            let skipped = false;
-            const skipButton = createSkipButton(() => {
-                skipped = true;
-            });
-            messageContent.appendChild(skipButton);
-            
-            const contentArea = document.createElement('div');
-            messageContent.appendChild(contentArea);
-            
-            // Process each reasoning step
-            for (let i = 0; i < travelReasoningSteps.length; i++) {
-                const step = travelReasoningSteps[i];
-                
-                if (skipped) break;
-                
-                // Show current header with blinking
-                headerArea.textContent = step.title;
-                headerArea.style.display = 'block';
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-                
-                // Wait for header to be visible
-                await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-                
-                if (!skipped) {
-                    // Create and add content chunk (without header)
-                    const chunk = createContentChunk(step.title, step.content, step.links);
-                    contentArea.appendChild(chunk);
-                    
-                    // Hide current header
-                    headerArea.style.display = 'none';
-                    
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                    
-                    // Wait before next step
-                    if (i < travelReasoningSteps.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
-                    }
-                }
-            }
-            
-            // Show final timing and remove skip button
-            const totalTime = Math.floor(Math.random() * 30) + 15; // 15-45 seconds
-            headerArea.textContent = `Thought for ${totalTime}s`;
-            headerArea.className = 'final-timing';
-            headerArea.style.display = 'block';
-            skipButton.remove();
-            
-            // Wait a moment before final answer
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Show final answer
-            const finalAnswerDiv = document.createElement('div');
-            finalAnswerDiv.className = 'final-answer';
-            messageContent.appendChild(finalAnswerDiv);
-            
-            const responseText = generateResponse(prompt);
-            await typeText(finalAnswerDiv, responseText);
-            
-            // Add action buttons
-            const actionButtons = document.createElement('div');
-            actionButtons.className = 'action-buttons';
-            actionButtons.innerHTML = `
-                <button class="action-btn">📋</button>
-                <button class="action-btn">👍</button>
-                <button class="action-btn">👎</button>
-                <button class="action-btn">↗️</button>
-                <button class="action-btn">🔄</button>
-                <button class="action-btn">⋯</button>
-            `;
-            messageContent.appendChild(actionButtons);
-            
-            // Add feedback bar
-            const feedbackBar = document.createElement('div');
-            feedbackBar.className = 'feedback-bar';
-            feedbackBar.innerHTML = `
-                <span>Is this conversation helpful so far?</span>
-                <div class="feedback-buttons">
-                    <button class="feedback-btn">👍</button>
-                    <button class="feedback-btn">👎</button>
-                    <button class="feedback-btn">✕</button>
-                </div>
-            `;
-            messageContent.appendChild(feedbackBar);
-            
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        function createSkipButton(callback) {
-            const button = document.createElement('button');
-            button.className = 'skip-button';
-            button.textContent = 'Skip'; // changed from "Skip for a quicker response"
-            button.addEventListener('click', callback);
-            return button;
         }
 
         function typeText(element, text, speed = 12) {
@@ -965,88 +539,108 @@
                 .replace(/$/, '</p>');
         }
 
-        function generateResponse(prompt) {
-            return `Short answer: with 6 days and ~$2,000 all-in, pick **Greece** (Athens + a day trip or two). It's easier on budget, English is widely spoken, and the must-see history is concentrated (so you won't spend time/money criss-crossing the country). Japan would be incredible, but spring flights from the U.S. tend to be pricier and you'd burn budget on a bullet train if you tried to squeeze in Kyoto.
+        function getSanDiegoResponse() {
+            return `Awesome—San Diego on ~$800 for two is totally doable. Here's a fun, budget-friendly weekend that hits beaches, history, and great food without stress.
 
-**Why Greece fits your constraints**
+**Weekend game plan (Fri–Sun)**
 
-**Flights.** Transatlantic fares have been soft this year while U.S.–Asia is still higher on average; Hopper/Forbes peg Asia round-trips around $1,087–$1,188 in early 2025, i.e., Japan often eats half your budget before you land. Europe has seen fare declines vs. last year, with Q1 U.S.→Europe averages down ~7%—good news for Athens.
+**Where to stay (2 nights, budget $160–$280 total before tax):**
 
-**Language.** Athens ranks "Very High" in the EF English Proficiency Index (capital city score 613), while Japan ranks low in the same index—signage is improving in Tokyo, but day-to-day English outside main hubs can still be tricky.
+- **Motel 6 – Hotel Circle (Mission Valley):** simple, central; recent sample rates in the ~$75–$90/nt range depending on dates.
+- **Kings Inn (Hotel Circle):** retro, clean, pool; note $15/night parking.
+- **Old Town Inn:** family-run, free parking & continental breakfast—handy for the budget.
+- **Hostel option:** HI San Diego Downtown (private rooms or dorms) in the Gaslamp.
 
-**On-the-ground costs.** Athens transport is cheap (3-day tourist ticket €20 incl. airport round-trip). Key sites: Acropolis general entry €30 in summer (April–Oct), Acropolis Museum €15. Mid-range hotel prices vary, but April is shoulder season and often cheaper than high summer.
+**Getting around (cheap & easy):**
 
-**Weather & timing.** April is mild and sunny in Athens (often ~20 °C / 68 °F). Tokyo in early April is magical for cherry blossoms, but it's also peak-crowd/peak-price.
+- Grab **PRONTO** on your phone/credit card and **fare-cap at $6/day** on bus & trolley (no planning needed—just tap).
 
-**6-day Athens-based itinerary (cultural, food-forward, historic)**
+**Day 1 – Friday (Arrival + Sunset)**
 
-**Day 1** – Arrive & settle (Plaka/Koukaki).
-Evening stroll in Plaka/Anafiotika; meze dinner and Greek wines.
+- Check in, drop bags.
+- **Sunset Cliffs Natural Park** for golden hour—dramatic ocean bluffs, free. (Parking lots have late-night closures; go for sunset.)
+- Dinner near Point Loma / Sports Arena:
+  • **Phil's BBQ** (half-chicken dinner ~$16–17; rib dinners too).
 
-**Day 2** – Acropolis & Museum (core classics).
-Morning timed ticket for the Acropolis (go at opening to beat crowds). Afternoon at the Acropolis Museum (world-class and air-conditioned). Sunset from Areopagus Hill; taverna in Thissio.
+**Day 2 – Saturday (Downtown + Bay or Zoo)**
 
-**Day 3** – Ancient Agora, Roman Agora, Monastiraki.
-Coffee culture, market tastings, and street-food lunch (souvlaki, koulouri). Optional guided food tour.
+**Option A (cheaper, history):**
 
-**Day 4** – Day trip: Nafplio + Epidaurus/Mycenae (*history in the Peloponnese*).
-Marvel at the theatre of Epidaurus and Bronze-Age Mycenae; dinner on Nafplio's seafront.
+- **USS Midway Museum** (aircraft carrier). **$39/adult**; plan ~2–3 hrs.
+- Stroll the waterfront afterward (Embarcadero).
 
-**Day 5** – Day trip: Aegina or Hydra (*islands without a long ferry*).
-Hydra hydrofoil ~1h20; fares typically ~€40 one-way. Aegina is even cheaper and quicker (as low as €11.50 one-way on slower ferries). Pistachios, temples, blue water—back to Athens for late dinner.
+**Option B (animal lovers):**
 
-**Day 6** – Neighborhoods & museums.
-Benaki or National Archaeological Museum; hip cafés in Pangrati or Exarchia; farewell dinner.
+- **San Diego Zoo** (Balboa Park). **$76/adult** for the 1-Day Pass (includes guided bus & Skyfari). Consider only if it fits the budget.
 
-**Transit tip:** the 3-day Athens Tourist Ticket (€20) includes one round-trip to/from the airport and unlimited metro/bus/tram—buy it at the airport; then top up singles as needed on other days.
+**Balboa Park** (free vibes either way): gardens, architecture, and people-watching are free; museums need tickets (Explorer Pass from $63–$75 if you planned multiple museums, but you can just wander for free).
 
-**Ticketing tip:** Acropolis prices rose and combo tickets were discontinued in 2025—buy timed entries online to save queuing.
+**Eats:**
 
-**Sketch budget (solo, 6 days)**
-• Round-trip flight (typical spring sale to ATH from East Coast): **$700–$1,000** (varies by city/date).
-• Lodging (5 nights): **$450–$700** (basic-mid hotels/guesthouses in central areas in April). *(Range reflects shoulder-season deals below the April "average" hotel rate figures often quoted.)*
-• Local transport: **$45–$60** (tourist pass + a few singles).
-• Food: **$180–$300** (mix of bakeries, souvlaki, and a few sit-down tavern meals).
-• Sites & extras: **$80–$150** (Acropolis €30 + Museum €15 + a couple of smaller sites).
-• Island/Peloponnese day trip transport: **$60–$120** (ferry or coach shares).
+- **Lucha Libre Taco Shop** (Mission Hills): tacos ~$5.50–$6.25; "California" burritos ~$17–$19—split one and add tacos to stay on budget.
 
-**Total:** roughly **$1,515–$2,330** depending on airfare and lodging choice. Land-costs can comfortably be kept near **$800–$1,000**.
+**Day 3 – Sunday (La Jolla + Old Town)**
 
-**If your heart is set on Japan (Tokyo-only plan to control costs)**
+- **La Jolla – Children's Pool** & seawall: watch harbor seals **year-round** (the beach itself closes Dec 15–May 15 for pupping, but viewing is allowed from the wall/sidewalk). **Free.**
+- **Point Loma Seafoods** for lunch (order at the counter; prices vary by catch—sandwiches/plates are market-priced).
+- **Old Town San Diego State Historic Park** in the afternoon (free admission, historic buildings & shops).
+- Grab casual Mexican at **Las Cuatro Milpas** (cash-only; famous rolled tacos, rice & beans—very budget-friendly).
+- Head out.
 
-Reality check on budget. Hopper/KAYAK put spring U.S.→Japan flights around $1,087–$1,188 round-trip on average this year. That leaves <$900 for lodging, food, transit, and admissions—tight but doable with hostels/capsules and smart eating.
+**Sample cost breakdown (for two)**
 
-**6-day Tokyo plan (focus on culture & food, minimal transit costs):**
+| Item | Est. total |
+|------|-----------|
+| Lodging (2 nts, budget hotel/hostel) | **$200–$280** |
+| Transit (PRONTO cap $6/day x 2 people x 2 days) | **$24** |
+| **Option A** activities (USS Midway only) | **$78** (2 x $39) |
+| **Option B** activities (Zoo only) | **$152** (2 x $76) |
+| Food & coffee (mix of tacos/BBQ/seafood; ~$20–$25 pp per meal x 4–5 casual meals) | **$180–$250** (choose lighter breakfasts or hotel breakfast to save) |
+| Misc./snacks & small museum/parking odds | **$30–$40** |
 
-**D1:** Arrive, Asakusa & Sensō-ji (free), Nakamise shopping street.
-**D2:** Meiji Shrine (free), Harajuku/Omotesandō, Shibuya food crawl (B-kyū "B-grade gourmet" spots).
-**D3:** Ueno Park museums or Tokyo National Museum (regular collection ~¥1,000), Ameyoko snacks.
-**D4:** Day trip to Kamakura (temples/Daibutsu) or Nikkō (Tōshōgū).
-**D5:** Tsukiji Outer Market breakfast, Ginza depachika food halls, evening in an izakaya alley.
-**D6:** Optional Edo-Tokyo Open Air Architectural Museum or tea ceremony experience.
+**Total with Option A (Midway):** roughly **$512–$672**
+**Total with Option B (Zoo):** roughly **$586–$746**
 
-**Transit tip:** get the Tokyo Subway Ticket (24/48/72h unlimited on Metro+Toei; 72h adult ¥1,500). Add a Welcome Suica for JR/local buses and small purchases. English signage is widespread on subways.
-
-**Japan budget sketch (solo, 6 days)**
-• Flight: **$1,000–$1,200** typical spring range.
-• Lodging (5 nights): **$200–$500** (capsule/hostel to budget hotel; Tokyo room rates have climbed with tourism).
-• Local transport: **$30–$60** (subway passes + some IC rides).
-• Food: **$150–$300** (plenty of satisfying ¥1,000 meals).
-• Admissions/misc.: **$40–$120** (many shrines/temples free or low cost).
-
-**Total:** roughly **$1,420–$2,180** *before* any long-distance shinkansen. A Tokyo+Kyoto combo adds ~¥28,000 (~$180–$200) round-trip just for the bullet train, pushing you past $2k quickly.
-
-**Bottom line & quick booking tips**
-• Pick **Greece** to keep the trip under $2k without stress. You'll get world-class antiquities, great food, and easy logistics in English.
-• **Book flights soon** (Europe has had softer fares; Asia less so). Reuters and Hopper/Forbes trendlines back that.
-• **Buy timed tickets** for the Acropolis and go at opening; museum in the afternoon.
-• **Transit passes:** Athens 3-day ticket (€20) and Tokyo Subway Ticket (¥1,500/72h) are the simplest money-savers.
-• **Language:** in Athens you'll encounter very high English proficiency; in Japan, metro signage is bilingual but general proficiency ranks low—learn a few basics and carry offline translation.
-
-If you tell me your departure city and whether you're traveling solo or with someone (to split hotel costs), I can tighten the airfare/lodging estimates to your exact budget and pre-fill the right ticket links.`;
+Both totals land safely under your **$800** target; pick *one* major paid attraction to keep plenty of breathing room.`;
         }
 
-        async function showDetailedReasoningProcess(prompt) {
+        function getRemoteWorkResponse() {
+            return `Here's a concise, manager-friendly snapshot of how companies are handling flexible work right now (as of October 2025).
+
+**Flexible Work 2025: Brief Summary Report**
+
+**1) Where work is actually happening**
+
+- Across the U.S., work-from-home has stabilized at roughly **¼ of all paid workdays**; monthly updates put recent figures in the **~27–29% range**. Hybrid remains the dominant model for "remote-capable" roles.
+
+- Gallup's latest shows **hybrid dipped slightly** this year (55% → 51% among remote-capable workers), with small offsets to both fully on-site and fully remote—i.e., not a wholesale "return."
+
+**2) Employer stance vs. employee preference**
+
+- **Employees still favor flexibility:** half prefer hybrid and a quarter prefer fully remote when job-seeking; only **~1 in 5** say fully in-office is their top choice.
+
+- **Retention risk:** many remote workers say they'd consider leaving if flexibility were removed.
+
+- **Executive sentiment is mixed and evolving:** 2024 CEO surveys leaned toward fuller office returns within three years, but 2025 updates show more CEOs accepting hybrid as the steady state (e.g., sharp drop among Australian CEOs who expect a full return).
+
+**3) Hiring market signal**
+
+- In professional job postings (Q2 2025 U.S.): **~24% hybrid, ~12% fully remote**—so flexibility remains a meaningful share of new roles even as on-site is still the plurality.
+
+**4) How hybrid is being structured**
+
+- Hybrid "gravity" is toward **3–4 in-office days:** among hybrid employees, **3 days is most common (39%)** and **4 days is rising (34%)**, indicating a slow drift to more in-office time without going fully back.
+
+- Leading guidance emphasizes a **clear "workplace value proposition"**—make commutes worth it with intentional collaboration, manager touchpoints, and on-site moments that justify presence.
+
+**5) Flexibility is shifting from "where" to "when"**
+
+- New 2025 surveys highlight interest in **non-linear schedules ("microshifting")** and willingness to **trade some pay for schedule/location flexibility**—signals that time-flex may be as critical as place-flex.
+
+- Microsoft's 2025 Work Trend Index frames "frontier firms" as those redesigning workflows for AI-enabled, distributed teams—pairing hybrid location with clearer norms, automation, and focus time.`;
+        }
+
+        async function showSimpleReasoningProcess(prompt, responseText) {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message assistant';
             
@@ -1061,61 +655,31 @@ If you tell me your departure city and whether you're traveling solo or with som
             messageDiv.appendChild(messageContent);
             chatContainer.appendChild(messageDiv);
             
-            let skipped = false;
-            let allSections = [];
+            // Show "Thinking..." header
+            const headerArea = document.createElement('div');
+            headerArea.className = 'current-header';
+            headerArea.textContent = 'Thinking...';
+            messageContent.appendChild(headerArea);
             
-            // Add skip button
-            const skipButton = createSkipButton(() => {
-                skipped = true;
-            });
-            messageContent.appendChild(skipButton);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
             
-            // Process each reasoning step
-            for (let i = 0; i < travelReasoningSteps.length; i++) {
-                const step = travelReasoningSteps[i];
-                
-                if (skipped) break;
-                
-                // Create section
-                const section = createThinkingSection(step.title, true);
-                allSections.push(section);
-                messageContent.appendChild(section.container);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-                
-                // Wait a bit before adding content
-                await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-                
-                if (!skipped) {
-                    addThinkingContentWithLinks(section.content, step.content, step.links);
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                    
-                    // Wait before next step
-                    if (i < travelReasoningSteps.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 2000));
-                    }
-                }
-            }
+            // Wait for 10 seconds
+            await new Promise(resolve => setTimeout(resolve, 10000));
             
-            // Mark all sections as completed and add times
-            allSections.forEach((section, index) => {
-                const time = Math.floor(Math.random() * 8) + 2; // 2-10 seconds
-                section.header.classList.add('completed');
-                section.status.classList.add('completed');
-                section.header.querySelector('span').textContent = `Thought for ${time}s`;
-            });
+            // Show "Thought for 10s"
+            headerArea.textContent = 'Thought for 10s';
+            headerArea.className = 'final-timing';
             
-            // Remove skip button
-            skipButton.remove();
+            chatContainer.scrollTop = chatContainer.scrollHeight;
             
-            // Wait a moment before final answer
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Wait a moment before showing answer
+            await new Promise(resolve => setTimeout(resolve, 1000));
             
             // Show final answer
             const finalAnswerDiv = document.createElement('div');
             finalAnswerDiv.className = 'final-answer';
             messageContent.appendChild(finalAnswerDiv);
             
-            const responseText = generateResponse(prompt);
             await typeText(finalAnswerDiv, responseText);
             
             // Add action buttons
@@ -1147,6 +711,29 @@ If you tell me your departure city and whether you're traveling solo or with som
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
+        function showErrorMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+            
+            const avatar = document.createElement('div');
+            avatar.className = 'avatar assistant-avatar';
+            avatar.textContent = 'AI';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            
+            messageContent.appendChild(errorDiv);
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(messageContent);
+            chatContainer.appendChild(messageDiv);
+            
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
         async function sendMessage() {
             if (isProcessing) return;
             
@@ -1157,12 +744,17 @@ If you tell me your departure city and whether you're traveling solo or with som
             updateSendButton();
             
             addUserMessage(message);
-            const userPrompt = message;
             messageInput.value = '';
             autoResize();
 
-            // Show progressive reasoning process
-            await showProgressiveReasoningProcess(userPrompt);
+            // Check which prompt was entered
+            if (message === SAN_DIEGO_PROMPT) {
+                await showSimpleReasoningProcess(message, getSanDiegoResponse());
+            } else if (message === REMOTE_WORK_PROMPT) {
+                await showSimpleReasoningProcess(message, getRemoteWorkResponse());
+            } else {
+                showErrorMessage("Please type in the given prompt");
+            }
             
             isProcessing = false;
             updateSendButton();
