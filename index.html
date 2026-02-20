@@ -607,13 +607,11 @@
             messageContent.appendChild(searchingCue);
             chatContainer.scrollTop = chatContainer.scrollHeight;
             try {
-                // Start the API call and the 10s delay simultaneously
-                const [response] = await Promise.all([
-                    callOpenAI(conversationHistory),
-                    delay(10000)
-                ]);
-                // Remove the searching cue
+                // Wait 10 seconds while showing "Searching the web"
+                await delay(10000);
+                // Remove the searching cue and start the API call
                 searchingCue.remove();
+                const response = await callOpenAI(conversationHistory);
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let fullText = '';
