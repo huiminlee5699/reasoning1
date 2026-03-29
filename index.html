@@ -516,7 +516,7 @@
             for (let i = 0; i < text.length; i++) {
                 span.textContent += text[i];
                 chatContainer.scrollTop = chatContainer.scrollHeight;
-                await delay(1 + Math.random() * 1);
+                await delay(Math.random());
             }
         }
 
