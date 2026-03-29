@@ -277,9 +277,10 @@
             sourceBubble.innerHTML = '&#128279; ' + responseObj.sourceLabel;
             sourceBubble.style.visibility = 'hidden';
             sourceBubble.addEventListener('click', () => {
-                hasClickedSource = true;
-                sourceClickCount++;
-                trackEvent({ type: 'source_click', topic: responseObj.topic, sourceLabel: responseObj.sourceLabel, sourceClickCount });
+                if (!hasClickedSource) {
+                    hasClickedSource = true;
+                    trackEvent({ type: 'source_click', topic: responseObj.topic, sourceLabel: responseObj.sourceLabel });
+                }
                 showModal('This function is not available at this time.');
             });
             answerLine.appendChild(sourceBubble);
