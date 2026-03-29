@@ -285,25 +285,17 @@
     <script>
         // ─────────────────────────────────────────────────────────────────
         // TRACKING CONFIGURATION
-        // Replace with your deployed Apps Script Web App URL
         // ─────────────────────────────────────────────────────────────────
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzPpyn3m6SbfNzAA-wyIfAfWrrdXWCIk5kWXsRFbQZLucKlR2rYIQbxfRR7vOsQ1dAD/exec';
 
-        // participantId is passed in the URL by Qualtrics, e.g.:
-        //   https://huiminlee5699.github.io/reasoning1/?participantId=${e://Field/ResponseID}
         const urlParams      = new URLSearchParams(window.location.search);
         const PARTICIPANT_ID = urlParams.get('participantId') || 'unknown';
         const SESSION_ID     = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
         const PAGE_LOAD_TIME = Date.now();
-        let sourceClickCount = 0;   // counts clicks on the source bubble this session
+        let sourceClickCount = 0;
 
-        function sinceLoad() {
-            return Date.now() - PAGE_LOAD_TIME;
-        }
+        function sinceLoad() { return Date.now() - PAGE_LOAD_TIME; }
 
-        // Fire-and-forget: sends an event (or array of events) to Apps Script.
-        // Uses no-cors so the browser never blocks on a preflight; we don't need
-        // the response body, just that the request leaves the browser.
         function trackEvent(eventObj) {
             const payload = Array.isArray(eventObj) ? eventObj : [eventObj];
             payload.forEach(ev => {
@@ -312,21 +304,145 @@
                 ev.sinceLoadMs   = sinceLoad();
                 ev.userAgent     = navigator.userAgent;
             });
-
             fetch(APPS_SCRIPT_URL, {
                 method:  'POST',
-                mode:    'no-cors',   // standard for Apps Script — no CORS headers returned
-                headers: { 'Content-Type': 'text/plain' },  // application/json is blocked under no-cors
+                mode:    'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
                 body:    JSON.stringify(payload)
-            }).catch(() => {});       // silent fail — never interrupt the participant
+            }).catch(() => {});
         }
 
         // ─────────────────────────────────────────────────────────────────
-        // STIMULUS CONFIGURATION
+        // STIMULUS CONFIGURATION — all 20 trigger questions
+        // Each entry: { topic, question, answer, sourceLabel }
         // ─────────────────────────────────────────────────────────────────
-        const TRIGGER_QUESTION = "Is the U.S. crime rate currently at a historic high?";
-        const SCRIPTED_ANSWER  = "No, the U.S. crime rate is not at a historic high. Crime levels today are generally much lower than they were in the 1980s and early 1990s, when both violent and property crime peaked. While there have been short-term increases in certain years or cities, the overall long-term trend shows a significant decline.";
-        const SOURCE_LABEL     = "Our World In Data";
+        const SCRIPTED_RESPONSES = [
+            {
+                topic: 'Politics1',
+                question: 'Is the U.S. crime rate currently at a historic high?',
+                answer: 'No, the U.S. crime rate is not at a historic high. Crime levels today are generally much lower than they were in the 1980s and early 1990s, when both violent and property crime peaked. While there have been short-term increases in certain years or cities, the overall long-term trend shows a significant decline.',
+                sourceLabel: 'Our World in Data'
+            },
+            {
+                topic: 'Politics2',
+                question: 'Are renewable energy jobs growing faster than fossil fuel jobs?',
+                answer: 'Yes, renewable energy jobs are generally growing faster than fossil fuel jobs in recent years. Employment in sectors like solar and wind has expanded rapidly, while job growth in fossil fuel industries has been slower and more variable. Overall, clean energy has become a major driver of new job creation within the energy sector.',
+                sourceLabel: 'World Resources Institute'
+            },
+            {
+                topic: 'Politics3',
+                question: 'Did student debt forgiveness significantly reduce borrowers\' debt levels?',
+                answer: 'Student debt forgiveness can reduce borrowers\' debt levels, but the impact varies depending on how much debt is forgiven and who receives it. Some borrowers see substantial reductions, especially those with smaller balances, while others experience more limited relief. Overall, it can meaningfully lower debt for many people, but it does not eliminate debt burdens across the board.',
+                sourceLabel: 'United States Census Bureau'
+            },
+            {
+                topic: 'Politics4',
+                question: 'Did the Affordable Care Act reduce the number of uninsured Americans?',
+                answer: 'Yes, the Affordable Care Act (ACA) reduced the number of uninsured Americans. After its major provisions took effect, the share of people without health insurance dropped noticeably compared to earlier years. This reflects a clear expansion in coverage through programs like Medicaid and the health insurance marketplaces.',
+                sourceLabel: 'United States Census Bureau'
+            },
+            {
+                topic: 'Politics5',
+                question: 'How widespread is voter fraud in U.S. elections?',
+                answer: 'Voter fraud in U.S. elections is rare and not widespread. Documented cases exist, but they represent a very small fraction compared to the total number of ballots cast over time. Overall, the evidence suggests that fraud occurs in isolated instances rather than as a systemic issue affecting election outcomes.',
+                sourceLabel: 'Heritage.org'
+            },
+            {
+                topic: 'Politics6',
+                question: 'Did inflation rise significantly in the U.S. after 2020?',
+                answer: 'Yes, inflation in the U.S. rose significantly after 2020. Price increases accelerated sharply compared to the relatively low inflation seen before the pandemic, reaching levels not observed in decades. This represents a clear and substantial shift in the overall price trend.',
+                sourceLabel: 'US Bureau of Labor Statistics'
+            },
+            {
+                topic: 'Politics7',
+                question: 'Has illegal immigration increased at the U.S. southern border in recent years?',
+                answer: 'Yes, illegal immigration at the U.S. southern border increased significantly in recent years, especially between 2021 and 2023. Border encounters reached historically high levels during that period, reflecting a sharp rise compared to earlier years. However, more recent data show that encounters have declined, indicating that the trend is not consistently increasing over time.',
+                sourceLabel: 'US Customs and Border Protection'
+            },
+            {
+                topic: 'Politics8',
+                question: 'Do younger voters participate in elections at lower rates than older voters?',
+                answer: 'Yes, younger voters participate at lower rates than older voters in U.S. elections. Voting participation tends to increase with age, and younger adults consistently show lower turnout compared to middle-aged and older groups. Although youth turnout has risen in some recent elections, a noticeable gap between younger and older voters still remains.',
+                sourceLabel: 'US Census Bureau'
+            },
+            {
+                topic: 'Politics9',
+                question: 'How has the U.S. unemployment rate changed since the COVID-19 pandemic?',
+                answer: 'The U.S. unemployment rate rose sharply at the start of the COVID-19 pandemic and then declined as the economy recovered. After reaching a peak in early 2020, unemployment steadily fell over the following months and years. By 2022, it had returned to levels similar to those seen before the pandemic.',
+                sourceLabel: 'US Bureau of Labor Statistics'
+            },
+            {
+                topic: 'Politics10',
+                question: 'Has political polarization increased over time in the U.S.?',
+                answer: 'Yes, political polarization in the U.S. has increased over time and remains high in recent years. Americans are more likely to align strongly with one political party and view the opposing party negatively than in the past. This growing divide is reflected in both attitudes and perceptions of conflict between political groups.',
+                sourceLabel: 'Pew Research'
+            },
+            {
+                topic: 'Health1',
+                question: 'How long does immunity last after getting a flu shot?',
+                answer: 'Immunity from a flu shot generally lasts about 5–6 months, although protection gradually declines over time. Because of this waning immunity and the fact that flu viruses change every year, health authorities recommend getting vaccinated annually. It also takes about two weeks after vaccination for protection to fully develop.',
+                sourceLabel: 'US CDC'
+            },
+            {
+                topic: 'Health2',
+                question: 'Can measles be transmitted by contaminated objects?',
+                answer: 'Yes, measles can be transmitted through contaminated objects, although this is not the main way it spreads. The virus can remain infectious in the air or on surfaces for a period of time, which means someone can become infected after touching a contaminated surface and then touching their face. However, most measles infections occur through airborne transmission rather than indirect contact.',
+                sourceLabel: 'US CDC'
+            },
+            {
+                topic: 'Health3',
+                question: 'Do vaccines weaken your immune system over time?',
+                answer: 'Vaccines do not weaken the immune system over time. Instead, they help the body recognize and respond more effectively to specific pathogens by building immune memory. Over time, this process supports the immune system\'s ability to protect against infections rather than reducing its function.',
+                sourceLabel: 'US CDC'
+            },
+            {
+                topic: 'Health4',
+                question: 'Does sweating more mean you burn more fat?',
+                answer: 'Sweating more does not mean you burn more fat. Sweat is mainly your body\'s way of regulating temperature, and the weight you lose through sweating is mostly temporary water loss. Fat loss is determined by overall energy balance over time, not by how much you sweat during a workout.',
+                sourceLabel: 'Medical News Today'
+            },
+            {
+                topic: 'Health5',
+                question: 'Does drinking lemon water detox your body?',
+                answer: 'Drinking lemon water does not detox your body. The body already has built-in systems, such as the liver and kidneys, that effectively remove waste and harmful substances. While staying hydrated is beneficial for overall health, lemon water itself does not enhance the body\'s detoxification process.',
+                sourceLabel: 'National Institutes of Health'
+            },
+            {
+                topic: 'Health6',
+                question: 'Do antibiotics work against viruses?',
+                answer: 'Antibiotics do not work against viruses and are only effective for treating bacterial infections. Illnesses such as the common cold, flu, and COVID-19 are caused by viruses, so antibiotics do not help in these cases. Using antibiotics when they are not needed can also contribute to antibiotic resistance, making future infections harder to treat.',
+                sourceLabel: 'US CDC'
+            },
+            {
+                topic: 'Health7',
+                question: 'Is brown sugar healthier than white sugar?',
+                answer: 'Brown sugar is not significantly healthier than white sugar. Both contain similar amounts of calories and have similar effects on blood sugar levels and metabolism. Although brown sugar has trace minerals from molasses, the difference is too small to have a meaningful impact on health.',
+                sourceLabel: 'Heart.org'
+            },
+            {
+                topic: 'Health8',
+                question: 'Does intermittent fasting improve metabolism?',
+                answer: 'Intermittent fasting does not necessarily improve metabolism beyond its effects on reducing overall calorie intake. People who follow intermittent fasting often lose weight, but similar results can be achieved through other forms of calorie restriction. The benefits are largely tied to eating less overall rather than a unique metabolic boost from the fasting pattern itself.',
+                sourceLabel: 'National Institutes of Health'
+            },
+            {
+                topic: 'Health9',
+                question: 'Are low-fat diets better than low-carb diets?',
+                answer: 'Low-fat diets are not inherently better than low-carb diets. Both approaches can lead to weight loss, and their effectiveness often depends on overall calorie intake and how well individuals can stick to the diet. Different diets may have varying short-term effects, but neither is consistently superior across all cases.',
+                sourceLabel: 'National Institutes of Health'
+            },
+            {
+                topic: 'Health10',
+                question: 'Do artificial sweeteners cause weight gain?',
+                answer: 'Artificial sweeteners do not necessarily cause weight gain. Some studies have found a link between their use and higher body weight, but this does not mean they directly lead to weight gain. Overall, the evidence is mixed, and there is no clear causal relationship showing that artificial sweeteners themselves increase body weight.',
+                sourceLabel: 'National Institutes of Health'
+            }
+        ];
+
+        // Build a lookup map: normalised question text → response object
+        const RESPONSE_MAP = new Map(
+            SCRIPTED_RESPONSES.map(r => [r.question.toLowerCase().trim(), r])
+        );
 
         let isProcessing = false;
 
@@ -372,7 +488,8 @@
         // CHAT HELPERS
         // ─────────────────────────────────────────────────────────────────
         function addUserMessage(content) {
-            welcomeScreen.classList.add('hidden');
+            document.getElementById('welcomeScreen') &&
+                document.getElementById('welcomeScreen').classList.add('hidden');
             const div = document.createElement('div');
             div.className = 'message user';
             div.textContent = content;
@@ -406,7 +523,7 @@
         // ─────────────────────────────────────────────────────────────────
         // RESPONSE HANDLERS
         // ─────────────────────────────────────────────────────────────────
-        async function handleTriggerQuestion(messageContent) {
+        async function handleTriggerQuestion(messageContent, responseObj) {
             // Step 1: Typing dots for 1s
             const dots = document.createElement('div');
             dots.className = 'typing-indicator';
@@ -436,7 +553,7 @@
             // Source bubble — hidden until streaming finishes
             const sourceBubble = document.createElement('span');
             sourceBubble.className = 'source-bubble';
-            sourceBubble.innerHTML = '<span class="source-icon">🔗</span>' + SOURCE_LABEL;
+            sourceBubble.innerHTML = '<span class="source-icon">🔗</span>' + responseObj.sourceLabel;
             sourceBubble.style.visibility = 'hidden';
 
             // ── TRACKING: source bubble click ──────────────────────────
@@ -444,22 +561,24 @@
                 sourceClickCount++;
                 trackEvent({
                     type:             'source_click',
-                    sourceLabel:      SOURCE_LABEL,
-                    sourceClickCount: sourceClickCount   // cumulative for this session
+                    topic:            responseObj.topic,
+                    sourceLabel:      responseObj.sourceLabel,
+                    sourceClickCount: sourceClickCount
                 });
                 showModal('This function is not available at this time.');
             });
 
             answerLine.appendChild(sourceBubble);
-            await streamText(textSpan, SCRIPTED_ANSWER);
+            await streamText(textSpan, responseObj.answer);
             sourceBubble.style.visibility = 'visible';
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
             // ── TRACKING: AI response shown ────────────────────────────
             trackEvent({
                 type:         'chat_response',
-                userMessage:  TRIGGER_QUESTION,
-                aiResponse:   SCRIPTED_ANSWER,
+                topic:        responseObj.topic,
+                userMessage:  responseObj.question,
+                aiResponse:   responseObj.answer,
                 responseType: 'scripted'
             });
         }
@@ -482,6 +601,7 @@
             // ── TRACKING: redirect response shown ─────────────────────
             trackEvent({
                 type:         'chat_response',
+                topic:        null,
                 userMessage:  userMessage,
                 aiResponse:   'Please type in the assigned prompt.',
                 responseType: 'redirect'
@@ -502,19 +622,20 @@
             messageInput.value = '';
             autoResize();
 
-            const isTrigger = message.toLowerCase() === TRIGGER_QUESTION.toLowerCase();
+            const matchedResponse = RESPONSE_MAP.get(message.toLowerCase().trim());
 
             // ── TRACKING: what the participant typed ───────────────────
             trackEvent({
                 type:              'chat_submit',
+                topic:             matchedResponse ? matchedResponse.topic : null,
                 userMessage:       message,
-                isTriggerQuestion: isTrigger
+                isTriggerQuestion: !!matchedResponse
             });
 
             const messageContent = createAssistantShell();
 
-            if (isTrigger) {
-                await handleTriggerQuestion(messageContent);
+            if (matchedResponse) {
+                await handleTriggerQuestion(messageContent, matchedResponse);
             } else {
                 await handleOtherMessage(messageContent, message);
             }
