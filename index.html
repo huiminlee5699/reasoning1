@@ -513,10 +513,10 @@
         }
 
         async function streamText(span, text) {
-            for (let i = 0; i < text.length; i++) {
-                span.textContent += text[i];
+            for (let i = 0; i < text.length; i += 3) {       // <-- change 3 to any chunk size
+                span.textContent += text.slice(i, i + 3);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
-                await delay(Math.random());
+                await delay(1 + Math.random() * 1);
             }
         }
 
