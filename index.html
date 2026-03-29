@@ -172,7 +172,7 @@
             font-size: 16px;
         }
 
-        /* Source link bubble */
+        /* Source link bubble — inline after answer text */
         .source-bubble {
             display: inline-flex;
             align-items: center;
@@ -180,20 +180,22 @@
             background-color: #f3f4f6;
             border: 1px solid #e5e7eb;
             border-radius: 20px;
-            padding: 6px 14px;
-            font-size: 13px;
+            padding: 3px 10px;
+            font-size: 12px;
             color: #374151;
             text-decoration: none;
-            margin-top: 16px;
+            margin-left: 8px;
+            vertical-align: middle;
             transition: background-color 0.2s, border-color 0.2s;
             cursor: pointer;
+            white-space: nowrap;
         }
         .source-bubble:hover {
             background-color: #e5e7eb;
             border-color: #d1d5db;
         }
         .source-bubble .source-icon {
-            font-size: 14px;
+            font-size: 12px;
         }
 
         /* Action buttons */
@@ -395,14 +397,17 @@
         async function streamText(container, text) {
             // Stream text character by character into a <p> element
             const p = document.createElement('p');
+            p.style.display = 'inline';
             container.appendChild(p);
 
             for (let i = 0; i < text.length; i++) {
                 p.textContent += text[i];
                 chatContainer.scrollTop = chatContainer.scrollHeight;
-                // Vary speed slightly for a natural feel
-                await delay(18 + Math.random() * 12);
+                // ~50% faster than before
+                await delay(9 + Math.random() * 6);
             }
+
+            return p;
         }
 
         async function handleTriggerQuestion(messageContent) {
@@ -426,16 +431,22 @@
             await delay(3000);
             searchingCue.remove();
 
-            // Step 3: Stream the scripted answer
-            await streamText(messageContent, SCRIPTED_ANSWER);
+            // Step 3: Stream the scripted answer, get back the <p> element
+            const answerP = await streamText(messageContent, SCRIPTED_ANSWER);
 
-            // Step 4: Add source bubble
+            // Step 4: Add source bubble inline right after the final period
             const sourceLink = document.createElement('a');
             sourceLink.href = SOURCE_URL;
             sourceLink.target = '_blank';
             sourceLink.rel = 'noopener noreferrer';
             sourceLink.className = 'source-bubble';
             sourceLink.innerHTML = `<span class="source-icon">🔗</span>${SOURCE_LABEL}`;
+            answerP.appendChild(sourceLink);
+
+            // Add a block-level break after the inline paragraph so action buttons sit below
+            const br = document.createElement('div');
+            br.style.marginTop = '16px';
+            messageContent.appendChild(br);
             messageContent.appendChild(sourceLink);
 
             // Step 5: Add action buttons
@@ -449,7 +460,7 @@
                 <button class="action-btn" title="Regenerate">🔄</button>
                 <button class="action-btn" title="More">⋯</button>
             `;
-            messageContent.appendChild(actionButtons);
+            br.appendChild(actionButtons);
 
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
