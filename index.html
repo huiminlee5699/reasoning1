@@ -287,7 +287,7 @@
         // TRACKING CONFIGURATION
         // Replace with your deployed Apps Script Web App URL
         // ─────────────────────────────────────────────────────────────────
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/1iKHUSWa8I3_eRHVlvkMbmpd3CnOUHj-j16twClweNdo/exec';
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
 
         // participantId is passed in the URL by Qualtrics, e.g.:
         //   https://huiminlee5699.github.io/reasoning1/?participantId=${e://Field/ResponseID}
@@ -316,7 +316,7 @@
             fetch(APPS_SCRIPT_URL, {
                 method:  'POST',
                 mode:    'no-cors',   // standard for Apps Script — no CORS headers returned
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'text/plain' },  // application/json is blocked under no-cors
                 body:    JSON.stringify(payload)
             }).catch(() => {});       // silent fail — never interrupt the participant
         }
