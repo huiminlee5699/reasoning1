@@ -421,17 +421,17 @@
             messageContent.appendChild(typingIndicator);
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            await delay(2000);
+            await delay(1000);
             typingIndicator.remove();
 
-            // Step 2: Show "Searching the web" for 3s
+            // Step 2: Show "Searching the web" for 2s
             const searchingCue = document.createElement('div');
             searchingCue.className = 'searching-cue';
             searchingCue.innerHTML = '<span class="search-icon">🔍</span> Searching the web';
             messageContent.appendChild(searchingCue);
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            await delay(3000);
+            await delay(2000);
             searchingCue.remove();
 
             // Step 3: answerLine is a block div; text span + source bubble are inline inside it
@@ -443,17 +443,19 @@
             const textSpan = document.createElement('span');
             answerLine.appendChild(textSpan);
 
-            // Source bubble appended right after textSpan — stays inline
+            // Source bubble — hidden until streaming is done
             const sourceLink = document.createElement('a');
             sourceLink.href = SOURCE_URL;
             sourceLink.target = '_blank';
             sourceLink.rel = 'noopener noreferrer';
             sourceLink.className = 'source-bubble';
             sourceLink.innerHTML = `<span class="source-icon">🔗</span>${SOURCE_LABEL}`;
+            sourceLink.style.visibility = 'hidden';
             answerLine.appendChild(sourceLink);
 
-            // Stream text (bubble is already in the DOM, sits after the growing text)
+            // Stream text, then reveal bubble
             await streamText(textSpan, SCRIPTED_ANSWER);
+            sourceLink.style.visibility = 'visible';
 
             // Step 4: Action buttons in a separate block below
             const actionButtons = document.createElement('div');
