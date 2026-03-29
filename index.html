@@ -283,21 +283,67 @@
     </div>
 
     <script>
-        const messageInput = document.getElementById('messageInput');
-        const sendBtn      = document.getElementById('sendBtn');
+        // ─────────────────────────────────────────────────────────────────
+        // TRACKING CONFIGURATION
+        // Replace with your deployed Apps Script Web App URL
+        // ─────────────────────────────────────────────────────────────────
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/1iKHUSWa8I3_eRHVlvkMbmpd3CnOUHj-j16twClweNdo/exec';
+
+        // participantId is passed in the URL by Qualtrics, e.g.:
+        //   https://huiminlee5699.github.io/reasoning1/?participantId=${e://Field/ResponseID}
+        const urlParams      = new URLSearchParams(window.location.search);
+        const PARTICIPANT_ID = urlParams.get('participantId') || 'unknown';
+        const SESSION_ID     = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const PAGE_LOAD_TIME = Date.now();
+        let sourceClickCount = 0;   // counts clicks on the source bubble this session
+
+        function sinceLoad() {
+            return Date.now() - PAGE_LOAD_TIME;
+        }
+
+        // Fire-and-forget: sends an event (or array of events) to Apps Script.
+        // Uses no-cors so the browser never blocks on a preflight; we don't need
+        // the response body, just that the request leaves the browser.
+        function trackEvent(eventObj) {
+            const payload = Array.isArray(eventObj) ? eventObj : [eventObj];
+            payload.forEach(ev => {
+                ev.participantId = PARTICIPANT_ID;
+                ev.sessionId     = SESSION_ID;
+                ev.sinceLoadMs   = sinceLoad();
+                ev.userAgent     = navigator.userAgent;
+            });
+
+            fetch(APPS_SCRIPT_URL, {
+                method:  'POST',
+                mode:    'no-cors',   // standard for Apps Script — no CORS headers returned
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(payload)
+            }).catch(() => {});       // silent fail — never interrupt the participant
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // STIMULUS CONFIGURATION
+        // ─────────────────────────────────────────────────────────────────
+        const TRIGGER_QUESTION = "Is the U.S. crime rate currently at a historic high?";
+        const SCRIPTED_ANSWER  = "No, the U.S. crime rate is not at a historic high. Crime levels today are generally much lower than they were in the 1980s and early 1990s, when both violent and property crime peaked. While there have been short-term increases in certain years or cities, the overall long-term trend shows a significant decline.";
+        const SOURCE_LABEL     = "Our World In Data";
+
+        let isProcessing = false;
+
+        // ─────────────────────────────────────────────────────────────────
+        // DOM REFERENCES
+        // ─────────────────────────────────────────────────────────────────
+        const messageInput  = document.getElementById('messageInput');
+        const sendBtn       = document.getElementById('sendBtn');
         const chatContainer = document.getElementById('chatContainer');
         const welcomeScreen = document.getElementById('welcomeScreen');
         const modalOverlay  = document.getElementById('modalOverlay');
         const modalMessage  = document.getElementById('modalMessage');
         const modalCloseBtn = document.getElementById('modalCloseBtn');
 
-        const TRIGGER_QUESTION = "Is the U.S. crime rate currently at a historic high?";
-        const SCRIPTED_ANSWER  = "No, the U.S. crime rate is not at a historic high. Crime levels today are generally much lower than they were in the 1980s and early 1990s, when both violent and property crime peaked. While there have been short-term increases in certain years or cities, the overall long-term trend shows a significant decline.";
-        const SOURCE_LABEL = "Our World In Data";
-
-        let isProcessing = false;
-
-        /* ── Modal helpers ── */
+        // ─────────────────────────────────────────────────────────────────
+        // MODAL HELPERS
+        // ─────────────────────────────────────────────────────────────────
         function showModal(msg) {
             modalMessage.textContent = msg;
             modalOverlay.classList.add('active');
@@ -310,7 +356,9 @@
             if (e.target === modalOverlay) closeModal();
         });
 
-        /* ── Input helpers ── */
+        // ─────────────────────────────────────────────────────────────────
+        // INPUT HELPERS
+        // ─────────────────────────────────────────────────────────────────
         function updateSendButton() {
             sendBtn.disabled = !messageInput.value.trim() || isProcessing;
         }
@@ -320,7 +368,9 @@
         }
         function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-        /* ── Chat helpers ── */
+        // ─────────────────────────────────────────────────────────────────
+        // CHAT HELPERS
+        // ─────────────────────────────────────────────────────────────────
         function addUserMessage(content) {
             welcomeScreen.classList.add('hidden');
             const div = document.createElement('div');
@@ -353,7 +403,9 @@
             }
         }
 
-        /* ── Response handlers ── */
+        // ─────────────────────────────────────────────────────────────────
+        // RESPONSE HANDLERS
+        // ─────────────────────────────────────────────────────────────────
         async function handleTriggerQuestion(messageContent) {
             // Step 1: Typing dots for 1s
             const dots = document.createElement('div');
@@ -364,7 +416,7 @@
             await delay(1000);
             dots.remove();
 
-            // Step 2: Searching the web for 2s
+            // Step 2: "Searching the web" cue for 2s
             const searching = document.createElement('div');
             searching.className = 'searching-cue';
             searching.innerHTML = '<span class="search-icon">🔍</span> Searching the web';
@@ -373,7 +425,7 @@
             await delay(2000);
             searching.remove();
 
-            // Step 3: Stream answer with source bubble hidden until done
+            // Step 3: Stream the scripted answer
             const answerLine = document.createElement('div');
             answerLine.className = 'answer-line';
             messageContent.appendChild(answerLine);
@@ -381,20 +433,38 @@
             const textSpan = document.createElement('span');
             answerLine.appendChild(textSpan);
 
+            // Source bubble — hidden until streaming finishes
             const sourceBubble = document.createElement('span');
             sourceBubble.className = 'source-bubble';
             sourceBubble.innerHTML = '<span class="source-icon">🔗</span>' + SOURCE_LABEL;
             sourceBubble.style.visibility = 'hidden';
-            sourceBubble.addEventListener('click', () => showModal('This function is not available at this time.'));
-            answerLine.appendChild(sourceBubble);
 
+            // ── TRACKING: source bubble click ──────────────────────────
+            sourceBubble.addEventListener('click', () => {
+                sourceClickCount++;
+                trackEvent({
+                    type:             'source_click',
+                    sourceLabel:      SOURCE_LABEL,
+                    sourceClickCount: sourceClickCount   // cumulative for this session
+                });
+                showModal('This function is not available at this time.');
+            });
+
+            answerLine.appendChild(sourceBubble);
             await streamText(textSpan, SCRIPTED_ANSWER);
             sourceBubble.style.visibility = 'visible';
-
             chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // ── TRACKING: AI response shown ────────────────────────────
+            trackEvent({
+                type:         'chat_response',
+                userMessage:  TRIGGER_QUESTION,
+                aiResponse:   SCRIPTED_ANSWER,
+                responseType: 'scripted'
+            });
         }
 
-        async function handleOtherMessage(messageContent) {
+        async function handleOtherMessage(messageContent, userMessage) {
             const dots = document.createElement('div');
             dots.className = 'typing-indicator';
             dots.innerHTML = '<span></span><span></span><span></span>';
@@ -408,8 +478,19 @@
             reminder.textContent = 'Please type in the assigned prompt.';
             messageContent.appendChild(reminder);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // ── TRACKING: redirect response shown ─────────────────────
+            trackEvent({
+                type:         'chat_response',
+                userMessage:  userMessage,
+                aiResponse:   'Please type in the assigned prompt.',
+                responseType: 'redirect'
+            });
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // SEND MESSAGE (main entry point)
+        // ─────────────────────────────────────────────────────────────────
         async function sendMessage() {
             if (isProcessing) return;
             const message = messageInput.value.trim();
@@ -421,19 +502,30 @@
             messageInput.value = '';
             autoResize();
 
-            const messageContent = createAssistantShell();
             const isTrigger = message.toLowerCase() === TRIGGER_QUESTION.toLowerCase();
+
+            // ── TRACKING: what the participant typed ───────────────────
+            trackEvent({
+                type:              'chat_submit',
+                userMessage:       message,
+                isTriggerQuestion: isTrigger
+            });
+
+            const messageContent = createAssistantShell();
+
             if (isTrigger) {
                 await handleTriggerQuestion(messageContent);
             } else {
-                await handleOtherMessage(messageContent);
+                await handleOtherMessage(messageContent, message);
             }
 
             isProcessing = false;
             updateSendButton();
         }
 
-        /* ── Event listeners ── */
+        // ─────────────────────────────────────────────────────────────────
+        // EVENT LISTENERS
+        // ─────────────────────────────────────────────────────────────────
         messageInput.addEventListener('input', () => { updateSendButton(); autoResize(); });
         messageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
