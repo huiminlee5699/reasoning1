@@ -198,6 +198,17 @@
             font-size: 12px;
         }
 
+        /* Answer line — block container so text wraps, bubble stays inline at end */
+        .answer-line {
+            display: block;
+            line-height: 1.7;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+        .answer-line span {
+            display: inline;
+        }
+
         /* Action buttons */
         .action-buttons {
             display: flex;
@@ -394,20 +405,12 @@
             return messageContent;
         }
 
-        async function streamText(container, text) {
-            // Stream text character by character into a <p> element
-            const p = document.createElement('p');
-            p.style.display = 'inline';
-            container.appendChild(p);
-
+        async function streamText(textSpan, text) {
             for (let i = 0; i < text.length; i++) {
-                p.textContent += text[i];
+                textSpan.textContent += text[i];
                 chatContainer.scrollTop = chatContainer.scrollHeight;
-                // ~50% faster than before
-                await delay(9 + Math.random() * 6);
+                await delay(5 + Math.random() * 5);
             }
-
-            return p;
         }
 
         async function handleTriggerQuestion(messageContent) {
@@ -431,25 +434,28 @@
             await delay(3000);
             searchingCue.remove();
 
-            // Step 3: Stream the scripted answer, get back the <p> element
-            const answerP = await streamText(messageContent, SCRIPTED_ANSWER);
+            // Step 3: answerLine is a block div; text span + source bubble are inline inside it
+            const answerLine = document.createElement('div');
+            answerLine.className = 'answer-line';
+            messageContent.appendChild(answerLine);
 
-            // Step 4: Add source bubble inline right after the final period
+            // Inline text span — streams into this
+            const textSpan = document.createElement('span');
+            answerLine.appendChild(textSpan);
+
+            // Source bubble appended right after textSpan — stays inline
             const sourceLink = document.createElement('a');
             sourceLink.href = SOURCE_URL;
             sourceLink.target = '_blank';
             sourceLink.rel = 'noopener noreferrer';
             sourceLink.className = 'source-bubble';
             sourceLink.innerHTML = `<span class="source-icon">🔗</span>${SOURCE_LABEL}`;
-            answerP.appendChild(sourceLink);
+            answerLine.appendChild(sourceLink);
 
-            // Add a block-level break after the inline paragraph so action buttons sit below
-            const br = document.createElement('div');
-            br.style.marginTop = '16px';
-            messageContent.appendChild(br);
-            messageContent.appendChild(sourceLink);
+            // Stream text (bubble is already in the DOM, sits after the growing text)
+            await streamText(textSpan, SCRIPTED_ANSWER);
 
-            // Step 5: Add action buttons
+            // Step 4: Action buttons in a separate block below
             const actionButtons = document.createElement('div');
             actionButtons.className = 'action-buttons';
             actionButtons.innerHTML = `
@@ -460,7 +466,7 @@
                 <button class="action-btn" title="Regenerate">🔄</button>
                 <button class="action-btn" title="More">⋯</button>
             `;
-            br.appendChild(actionButtons);
+            messageContent.appendChild(actionButtons);
 
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
