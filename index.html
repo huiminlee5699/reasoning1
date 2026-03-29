@@ -5,11 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChatGPT</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #f7f7f8;
@@ -17,6 +13,8 @@
             height: 100vh;
             display: flex;
         }
+
+        /* ── Sidebar ── */
         .sidebar {
             width: 260px;
             background-color: #f3f4f6;
@@ -38,13 +36,8 @@
             gap: 8px;
             font-size: 14px;
         }
-        .new-chat-btn:hover {
-            background-color: #e5e7eb;
-        }
-        .sidebar-items {
-            flex: 1;
-            overflow-y: auto;
-        }
+        .new-chat-btn:hover { background-color: #e5e7eb; }
+        .sidebar-items { flex: 1; overflow-y: auto; }
         .sidebar-item {
             padding: 12px;
             color: #374151;
@@ -56,14 +49,10 @@
             align-items: center;
             gap: 8px;
         }
-        .sidebar-item:hover {
-            background-color: #e5e7eb;
-        }
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
+        .sidebar-item:hover { background-color: #e5e7eb; }
+
+        /* ── Main ── */
+        .main-content { flex: 1; display: flex; flex-direction: column; }
         .chat-container {
             flex: 1;
             overflow-y: auto;
@@ -75,17 +64,10 @@
             margin: 0 auto;
             width: 100%;
         }
-        .welcome-screen {
-            text-align: center;
-            margin-top: 20vh;
-            margin-bottom: 2rem;
-        }
-        .welcome-title {
-            font-size: 32px;
-            font-weight: 600;
-            margin-bottom: 32px;
-            color: #374151;
-        }
+        .welcome-screen { text-align: center; margin-top: 20vh; margin-bottom: 2rem; }
+        .welcome-title { font-size: 32px; font-weight: 600; margin-bottom: 32px; color: #374151; }
+
+        /* ── Messages ── */
         .message {
             width: 100%;
             margin-bottom: 24px;
@@ -101,53 +83,24 @@
             max-width: 70%;
             display: block;
         }
-        .message.assistant {
-            background-color: transparent;
-            width: 100%;
-        }
+        .message.assistant { background-color: transparent; width: 100%; }
         .avatar {
-            width: 32px;
-            height: 32px;
+            width: 32px; height: 32px;
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 14px;
-            flex-shrink: 0;
-            margin-top: 4px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 600; font-size: 14px;
+            flex-shrink: 0; margin-top: 4px;
         }
-        .assistant-avatar {
-            background-color: #10a37f;
-            color: white;
-        }
-        .message-content {
-            flex: 1;
-            line-height: 1.6;
-        }
-        .final-answer {
-            margin-top: 16px;
-            line-height: 1.7;
-        }
-        .final-answer p {
-            margin-bottom: 16px;
-            color: #374151;
-        }
-        .final-answer strong {
-            font-weight: 600;
-            color: #111827;
-        }
+        .assistant-avatar { background-color: #10a37f; color: white; }
+        .message-content { flex: 1; line-height: 1.6; }
+        .final-answer { line-height: 1.7; }
+        .final-answer p { margin-bottom: 16px; color: #374151; }
+        .final-answer strong { font-weight: 600; color: #111827; }
 
-        /* Typing indicator dots */
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 0;
-        }
+        /* ── Typing indicator ── */
+        .typing-indicator { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
         .typing-indicator span {
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             background-color: #9ca3af;
             animation: bounce 1.2s infinite;
@@ -159,20 +112,15 @@
             30% { transform: translateY(-6px); opacity: 1; }
         }
 
-        /* Searching the web cue */
-        .searching-cue {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            color: #6b7280;
-            padding: 8px 0;
-        }
-        .searching-cue .search-icon {
-            font-size: 16px;
-        }
+        /* ── Searching cue ── */
+        .searching-cue { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #6b7280; padding: 8px 0; }
+        .searching-cue .search-icon { font-size: 16px; }
 
-        /* Source link bubble — inline after answer text */
+        /* ── Answer line ── */
+        .answer-line { display: block; line-height: 1.7; color: #374151; margin-bottom: 4px; }
+        .answer-line span { display: inline; }
+
+        /* ── Source bubble ── */
         .source-bubble {
             display: inline-flex;
             align-items: center;
@@ -183,144 +131,133 @@
             padding: 3px 10px;
             font-size: 12px;
             color: #374151;
-            text-decoration: none;
             margin-left: 8px;
             vertical-align: middle;
             transition: background-color 0.2s, border-color 0.2s;
             cursor: pointer;
             white-space: nowrap;
         }
-        .source-bubble:hover {
-            background-color: #e5e7eb;
-            border-color: #d1d5db;
-        }
-        .source-bubble .source-icon {
-            font-size: 12px;
-        }
+        .source-bubble:hover { background-color: #e5e7eb; border-color: #d1d5db; }
+        .source-bubble .source-icon { font-size: 12px; }
 
-        /* Answer line — block container so text wraps, bubble stays inline at end */
-        .answer-line {
-            display: block;
-            line-height: 1.7;
-            color: #374151;
-            margin-bottom: 4px;
-        }
-        .answer-line span {
-            display: inline;
-        }
+        /* ── Prompt reminder ── */
+        .prompt-reminder { color: #6b7280; font-size: 14px; font-style: italic; padding: 4px 0; }
 
-        /* Action buttons */
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-            margin-top: 16px;
-            padding: 8px 0;
-        }
-        .action-btn {
-            background: none;
-            border: none;
-            color: #6b7280;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 4px;
-            transition: background-color 0.2s;
-        }
-        .action-btn:hover {
-            background-color: #f3f4f6;
-        }
-
-        /* "Please type assigned prompt" message */
-        .prompt-reminder {
-            color: #6b7280;
-            font-size: 14px;
-            font-style: italic;
-            padding: 4px 0;
-        }
-
+        /* ── Input area ── */
         .input-container {
-            position: sticky;
-            bottom: 0;
+            position: sticky; bottom: 0;
             background-color: #f7f7f8;
             padding: 20px;
-            max-width: 768px;
-            width: 100%;
-            margin: 0 auto;
+            max-width: 768px; width: 100%; margin: 0 auto;
         }
         .input-wrapper {
             position: relative;
             background-color: white;
             border-radius: 24px;
             border: 1px solid #d1d5db;
-            display: flex;
-            align-items: flex-end;
-            padding: 12px;
-            gap: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex; align-items: flex-end;
+            padding: 12px; gap: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             min-height: 56px;
         }
         .input-field {
-            flex: 1;
-            background: transparent;
-            border: none;
-            color: #374151;
-            font-size: 16px;
-            resize: none;
-            outline: none;
-            min-height: 24px;
-            max-height: 200px;
-            line-height: 1.5;
-            padding: 8px 12px;
+            flex: 1; background: transparent; border: none;
+            color: #374151; font-size: 16px;
+            resize: none; outline: none;
+            min-height: 24px; max-height: 200px;
+            line-height: 1.5; padding: 8px 12px;
         }
-        .input-field::placeholder {
-            color: #9ca3af;
-        }
+        .input-field::placeholder { color: #9ca3af; }
         .send-btn {
-            background-color: #10a37f;
-            border: none;
-            border-radius: 50%;
-            padding: 8px;
-            cursor: pointer;
-            display: flex;
+            background-color: #10a37f; border: none;
+            border-radius: 50%; padding: 8px;
+            cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            color: white; width: 32px; height: 32px;
+        }
+        .send-btn:disabled { background-color: #d1d5db; cursor: not-allowed; }
+        .hidden { display: none; }
+
+        /* ── Modal ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.35);
+            z-index: 1000;
             align-items: center;
             justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-box {
+            background: white;
+            border-radius: 14px;
+            padding: 32px 36px;
+            max-width: 360px;
+            width: 90%;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            animation: modalIn 0.15s ease;
+        }
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+        .modal-message {
+            font-size: 15px;
+            color: #374151;
+            line-height: 1.6;
+            text-align: center;
+        }
+        .modal-close-btn {
+            background-color: #10a37f;
             color: white;
-            width: 32px;
-            height: 32px;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 32px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
         }
-        .send-btn:disabled {
-            background-color: #d1d5db;
-            cursor: not-allowed;
-        }
-        .hidden {
-            display: none;
-        }
+        .modal-close-btn:hover { background-color: #0d8f6f; }
     </style>
 </head>
 <body>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-box">
+            <p class="modal-message" id="modalMessage"></p>
+            <button class="modal-close-btn" id="modalCloseBtn">Close</button>
+        </div>
+    </div>
+
     <div class="sidebar">
         <button class="new-chat-btn">
             <span>+</span>
             New chat
         </button>
         <div class="sidebar-items">
-            <div class="sidebar-item" onclick="alert('You do not have any saved chats yet.')">
+            <div class="sidebar-item" onclick="showModal('You do not have any saved chats yet.')">
                 <span>🔍</span>
                 Search chats
             </div>
-            <div class="sidebar-item" onclick="alert('This function is not available at this time.')">
+            <div class="sidebar-item" onclick="showModal('This function is not available at this time.')">
                 <span>📚</span>
                 Library
             </div>
-            <div class="sidebar-item" onclick="alert('This function is not available at this time.')">
+            <div class="sidebar-item" onclick="showModal('This function is not available at this time.')">
                 <span>⚙️</span>
                 GPTs
             </div>
         </div>
         <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid #d1d5db;">
             <div class="sidebar-item">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background-color: #10a37f; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;">
-                    U
-                </div>
+                <div style="width:32px;height:32px;border-radius:50%;background-color:#10a37f;display:flex;align-items:center;justify-content:center;color:white;font-weight:600;font-size:14px;">U</div>
                 User
             </div>
         </div>
@@ -334,12 +271,7 @@
         </div>
         <div class="input-container">
             <div class="input-wrapper" id="inputWrapper">
-                <textarea
-                    id="messageInput"
-                    class="input-field"
-                    placeholder="Message ChatGPT"
-                    rows="1"
-                ></textarea>
+                <textarea id="messageInput" class="input-field" placeholder="Message ChatGPT" rows="1"></textarea>
                 <button id="sendBtn" class="send-btn" disabled>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -352,124 +284,124 @@
 
     <script>
         const messageInput = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
+        const sendBtn      = document.getElementById('sendBtn');
         const chatContainer = document.getElementById('chatContainer');
         const welcomeScreen = document.getElementById('welcomeScreen');
+        const modalOverlay  = document.getElementById('modalOverlay');
+        const modalMessage  = document.getElementById('modalMessage');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
 
         const TRIGGER_QUESTION = "Is the U.S. crime rate currently at a historic high?";
-        const SCRIPTED_ANSWER = "No, the U.S. crime rate is not at a historic high. Crime levels today are generally much lower than they were in the 1980s and early 1990s, when both violent and property crime peaked. While there have been short-term increases in certain years or cities, the overall long-term trend shows a significant decline.";
-        const SOURCE_URL = "https://ourworldindata.org/us-crime-rates?utm_source=chatgpt.com";
+        const SCRIPTED_ANSWER  = "No, the U.S. crime rate is not at a historic high. Crime levels today are generally much lower than they were in the 1980s and early 1990s, when both violent and property crime peaked. While there have been short-term increases in certain years or cities, the overall long-term trend shows a significant decline.";
         const SOURCE_LABEL = "Our World In Data";
 
         let isProcessing = false;
 
-        function updateSendButton() {
-            const hasText = messageInput.value.trim().length > 0;
-            sendBtn.disabled = !hasText || isProcessing;
+        /* ── Modal helpers ── */
+        function showModal(msg) {
+            modalMessage.textContent = msg;
+            modalOverlay.classList.add('active');
         }
+        function closeModal() {
+            modalOverlay.classList.remove('active');
+        }
+        modalCloseBtn.addEventListener('click', closeModal);
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) closeModal();
+        });
 
+        /* ── Input helpers ── */
+        function updateSendButton() {
+            sendBtn.disabled = !messageInput.value.trim() || isProcessing;
+        }
         function autoResize() {
             messageInput.style.height = 'auto';
             messageInput.style.height = messageInput.scrollHeight + 'px';
         }
+        function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-        function delay(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-
+        /* ── Chat helpers ── */
         function addUserMessage(content) {
             welcomeScreen.classList.add('hidden');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'message user';
-            messageDiv.textContent = content;
-            chatContainer.appendChild(messageDiv);
+            const div = document.createElement('div');
+            div.className = 'message user';
+            div.textContent = content;
+            chatContainer.appendChild(div);
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
         function createAssistantShell() {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'message assistant';
-
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message assistant';
             const avatar = document.createElement('div');
             avatar.className = 'avatar assistant-avatar';
             avatar.textContent = 'AI';
-
-            const messageContent = document.createElement('div');
-            messageContent.className = 'message-content final-answer';
-
-            messageDiv.appendChild(avatar);
-            messageDiv.appendChild(messageContent);
-            chatContainer.appendChild(messageDiv);
+            const content = document.createElement('div');
+            content.className = 'message-content final-answer';
+            msgDiv.appendChild(avatar);
+            msgDiv.appendChild(content);
+            chatContainer.appendChild(msgDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            return messageContent;
+            return content;
         }
 
-        async function streamText(textSpan, text) {
+        async function streamText(span, text) {
             for (let i = 0; i < text.length; i++) {
-                textSpan.textContent += text[i];
+                span.textContent += text[i];
                 chatContainer.scrollTop = chatContainer.scrollHeight;
                 await delay(1 + Math.random() * 1);
             }
         }
 
+        /* ── Response handlers ── */
         async function handleTriggerQuestion(messageContent) {
-            // Step 1: Show "…" typing indicator for 2s
-            const typingIndicator = document.createElement('div');
-            typingIndicator.className = 'typing-indicator';
-            typingIndicator.innerHTML = '<span></span><span></span><span></span>';
-            messageContent.appendChild(typingIndicator);
+            // Step 1: Typing dots for 1s
+            const dots = document.createElement('div');
+            dots.className = 'typing-indicator';
+            dots.innerHTML = '<span></span><span></span><span></span>';
+            messageContent.appendChild(dots);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-
             await delay(1000);
-            typingIndicator.remove();
+            dots.remove();
 
-            // Step 2: Show "Searching the web" for 2s
-            const searchingCue = document.createElement('div');
-            searchingCue.className = 'searching-cue';
-            searchingCue.innerHTML = '<span class="search-icon">🔍</span> Searching the web';
-            messageContent.appendChild(searchingCue);
+            // Step 2: Searching the web for 2s
+            const searching = document.createElement('div');
+            searching.className = 'searching-cue';
+            searching.innerHTML = '<span class="search-icon">🔍</span> Searching the web';
+            messageContent.appendChild(searching);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-
             await delay(2000);
-            searchingCue.remove();
+            searching.remove();
 
-            // Step 3: answerLine is a block div; text span + source bubble are inline inside it
+            // Step 3: Stream answer with source bubble hidden until done
             const answerLine = document.createElement('div');
             answerLine.className = 'answer-line';
             messageContent.appendChild(answerLine);
 
-            // Inline text span — streams into this
             const textSpan = document.createElement('span');
             answerLine.appendChild(textSpan);
 
-            // Source bubble — hidden until streaming is done, alert on click
-            const sourceLink = document.createElement('span');
-            sourceLink.className = 'source-bubble';
-            sourceLink.innerHTML = `<span class="source-icon">🔗</span>${SOURCE_LABEL}`;
-            sourceLink.style.visibility = 'hidden';
-            sourceLink.addEventListener('click', () => {
-                alert('This function is not available at this time.');
-            });
-            answerLine.appendChild(sourceLink);
+            const sourceBubble = document.createElement('span');
+            sourceBubble.className = 'source-bubble';
+            sourceBubble.innerHTML = '<span class="source-icon">🔗</span>' + SOURCE_LABEL;
+            sourceBubble.style.visibility = 'hidden';
+            sourceBubble.addEventListener('click', () => showModal('This function is not available at this time.'));
+            answerLine.appendChild(sourceBubble);
 
-            // Stream text, then reveal bubble
             await streamText(textSpan, SCRIPTED_ANSWER);
-            sourceLink.style.visibility = 'visible';
+            sourceBubble.style.visibility = 'visible';
 
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
         async function handleOtherMessage(messageContent) {
-            // Brief typing indicator before showing the reminder
-            const typingIndicator = document.createElement('div');
-            typingIndicator.className = 'typing-indicator';
-            typingIndicator.innerHTML = '<span></span><span></span><span></span>';
-            messageContent.appendChild(typingIndicator);
+            const dots = document.createElement('div');
+            dots.className = 'typing-indicator';
+            dots.innerHTML = '<span></span><span></span><span></span>';
+            messageContent.appendChild(dots);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-
             await delay(1000);
-            typingIndicator.remove();
+            dots.remove();
 
             const reminder = document.createElement('p');
             reminder.className = 'prompt-reminder';
@@ -480,21 +412,17 @@
 
         async function sendMessage() {
             if (isProcessing) return;
-
             const message = messageInput.value.trim();
             if (!message) return;
 
             isProcessing = true;
             updateSendButton();
-
             addUserMessage(message);
             messageInput.value = '';
             autoResize();
 
             const messageContent = createAssistantShell();
-
-            const isTrigger = message.toLowerCase().trim() === TRIGGER_QUESTION.toLowerCase().trim();
-
+            const isTrigger = message.toLowerCase() === TRIGGER_QUESTION.toLowerCase();
             if (isTrigger) {
                 await handleTriggerQuestion(messageContent);
             } else {
@@ -505,24 +433,16 @@
             updateSendButton();
         }
 
-        // Event listeners
-        messageInput.addEventListener('input', () => {
-            updateSendButton();
-            autoResize();
-        });
-
+        /* ── Event listeners ── */
+        messageInput.addEventListener('input', () => { updateSendButton(); autoResize(); });
         messageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!sendBtn.disabled) {
-                    sendMessage();
-                }
+                if (!sendBtn.disabled) sendMessage();
             }
         });
-
         sendBtn.addEventListener('click', sendMessage);
 
-        // New chat button
         document.querySelector('.new-chat-btn').addEventListener('click', () => {
             chatContainer.innerHTML = '';
             const ws = document.createElement('div');
@@ -532,7 +452,6 @@
             chatContainer.appendChild(ws);
         });
 
-        // Initialize
         updateSendButton();
     </script>
 </body>
