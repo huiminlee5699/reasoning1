@@ -119,6 +119,7 @@
 
         const urlParams      = new URLSearchParams(window.location.search);
         const PARTICIPANT_ID = urlParams.get('participantId') || 'unknown';
+        const CONDITION      = urlParams.get('condition') || 'unknown';
         const SESSION_ID     = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
         const PAGE_LOAD_TIME = Date.now();
         let sourceClickCount = 0;
@@ -131,6 +132,7 @@
             payload.forEach(ev => {
                 ev.participantId = PARTICIPANT_ID;
                 ev.sessionId     = SESSION_ID;
+                ev.condition     = CONDITION;
                 ev.sinceLoadMs   = sinceLoad();
                 ev.userAgent     = navigator.userAgent;
             });
