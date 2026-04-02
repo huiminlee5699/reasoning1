@@ -376,7 +376,7 @@
                         if (li_i === nonEmptyLines.length - 1 && sourceTriggers.has(b)) {
                             const bubble = document.createElement('span');
                             bubble.className = 'source-bubble';
-                            bubble.innerHTML = '&#128279; ' + chosenSource;
+                            bubble.innerHTML = '&#128279; ' + randomSource();
                             bubble.addEventListener('click', onSourceClick);
                             li.appendChild(bubble);
                         }
@@ -390,7 +390,7 @@
                     if (sourceTriggers.has(b)) {
                         const bubble = document.createElement('span');
                         bubble.className = 'source-bubble';
-                        bubble.innerHTML = '&#128279; ' + chosenSource;
+                        bubble.innerHTML = '&#128279; ' + randomSource();
                         bubble.addEventListener('click', onSourceClick);
                         p.appendChild(bubble);
                     }
