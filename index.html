@@ -315,26 +315,27 @@
         async function streamFormattedAnswer(container, text, chosenSource, onSourceClick) {
             const blocks = text.split(/\n\n+/);
 
-            // Pre-determine which paragraph-type block indices get a source bubble (every 2 or 3)
-            const paraBlockIndices = [];
+            // Eligible blocks = paragraphs OR bullet lists (not bold-only headers)
+            const eligibleBlockIndices = [];
             blocks.forEach((b, i) => {
                 const trimmed = b.trim();
                 if (!trimmed) return;
-                const lines = trimmed.split('\n');
                 const isHeader = /^\*\*[^*]+\*\*$/.test(trimmed);
-                const isList = lines.every(l => /^[-*]\s/.test(l.trim()) || l.trim() === '');
-                if (!isHeader && !isList) paraBlockIndices.push(i);
+                if (!isHeader) eligibleBlockIndices.push(i);
             });
 
+            // Pre-determine which eligible blocks get a source bubble, every 2 or 3
             const sourceTriggers = new Set();
             let cursor = 0;
-            while (cursor < paraBlockIndices.length) {
+            while (cursor < eligibleBlockIndices.length) {
                 cursor += (Math.random() < 0.5 ? 2 : 3);
-                if (cursor <= paraBlockIndices.length) sourceTriggers.add(paraBlockIndices[cursor - 1]);
+                if (cursor <= eligibleBlockIndices.length) {
+                    sourceTriggers.add(eligibleBlockIndices[cursor - 1]);
+                }
             }
-            if (paraBlockIndices.length > 0) {
-                const lastParaIdx = paraBlockIndices[paraBlockIndices.length - 1];
-                if (!sourceTriggers.has(lastParaIdx)) sourceTriggers.add(lastParaIdx);
+            // Always ensure the last eligible block has a bubble
+            if (eligibleBlockIndices.length > 0) {
+                sourceTriggers.add(eligibleBlockIndices[eligibleBlockIndices.length - 1]);
             }
 
             for (let b = 0; b < blocks.length; b++) {
@@ -342,12 +343,11 @@
                 if (!block) continue;
                 const lines = block.split('\n');
 
-                // Bold-only header: entire block is **text**
                 const isHeader = /^\*\*[^*]+\*\*$/.test(block);
-                // Pure bullet list: every non-empty line starts with - or *
                 const isList = lines.every(l => /^[-*]\s/.test(l.trim()) || l.trim() === '');
 
                 if (isHeader) {
+                    // Bold header — no source bubble
                     const h = document.createElement('p');
                     h.style.cssText = 'margin: 14px 0 4px 0; line-height: 1.7;';
                     container.appendChild(h);
@@ -365,13 +365,21 @@
                     const ul = document.createElement('ul');
                     ul.style.cssText = 'margin: 4px 0 8px 20px; padding: 0;';
                     container.appendChild(ul);
-                    for (const line of lines) {
-                        const trimmed = line.trim();
-                        if (!trimmed) continue;
+                    const nonEmptyLines = lines.filter(l => l.trim());
+                    for (let li_i = 0; li_i < nonEmptyLines.length; li_i++) {
+                        const trimmed = nonEmptyLines[li_i].trim();
                         const li = document.createElement('li');
                         li.style.cssText = 'margin-bottom: 4px; line-height: 1.7;';
                         ul.appendChild(li);
                         await streamMarkdownTextInto(li, trimmed.replace(/^[-*]\s+/, ''));
+                        // Append source bubble inline on the last bullet of this block if triggered
+                        if (li_i === nonEmptyLines.length - 1 && sourceTriggers.has(b)) {
+                            const bubble = document.createElement('span');
+                            bubble.className = 'source-bubble';
+                            bubble.innerHTML = '&#128279; ' + chosenSource;
+                            bubble.addEventListener('click', onSourceClick);
+                            li.appendChild(bubble);
+                        }
                     }
                 } else {
                     // Regular paragraph — may contain inline **bold**
