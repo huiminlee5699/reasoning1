@@ -294,11 +294,50 @@
             return content;
         }
 
-        async function streamText(span, text) {
-            for (let i = 0; i < text.length; i += 3) {
-                span.textContent += text.slice(i, i + 3);
+        const SOURCES = ['NewsWeek', 'Reddit', 'Straight Arrow News', 'Ground News', 'Truthout', 'Our World in Data'];
+        function randomSource() { return SOURCES[Math.floor(Math.random() * SOURCES.length)]; }
+
+        async function streamTextInto(el, text) {
+            // Stream characters one-by-one into a plain text node at speed
+            const node = document.createTextNode('');
+            el.appendChild(node);
+            for (let i = 0; i < text.length; i += 4) {
+                node.textContent += text.slice(i, i + 4);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
-                await delay(1 + Math.random() * 1);
+                await delay(Math.random() * 8);
+            }
+        }
+
+        async function streamFormattedAnswer(container, text) {
+            // Split answer into blocks: bullet lines (starting with - or *) vs paragraph text
+            // We split on double-newlines for paragraphs, single newlines preserved within
+            const blocks = text.split(/\n\n+/);
+            for (let b = 0; b < blocks.length; b++) {
+                const block = blocks[b].trim();
+                if (!block) continue;
+                const lines = block.split('\n');
+                // Check if this block is a bullet list
+                const isList = lines.every(l => /^[-*]\s/.test(l.trim()) || l.trim() === '');
+                if (isList) {
+                    const ul = document.createElement('ul');
+                    ul.style.cssText = 'margin: 6px 0 6px 20px; padding: 0;';
+                    container.appendChild(ul);
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed) continue;
+                        const li = document.createElement('li');
+                        li.style.cssText = 'margin-bottom: 4px; line-height: 1.7;';
+                        ul.appendChild(li);
+                        await streamTextInto(li, trimmed.replace(/^[-*]\s+/, ''));
+                    }
+                } else {
+                    // Regular paragraph — stream all lines as one block
+                    const p = document.createElement('p');
+                    p.style.cssText = 'margin-bottom: 10px; line-height: 1.7;';
+                    container.appendChild(p);
+                    await streamTextInto(p, lines.join(' '));
+                }
+                chatContainer.scrollTop = chatContainer.scrollHeight;
             }
         }
 
@@ -340,6 +379,7 @@
 
         async function handleTriggerQuestion(messageContent, responseObj) {
             let hasClickedSource = false;
+            const chosenSource = randomSource();
 
             const dots = document.createElement('div');
             dots.className = 'typing-indicator';
@@ -357,31 +397,32 @@
             await delay(2000);
             searching.remove();
 
-            const answerLine = document.createElement('div');
-            answerLine.className = 'answer-line';
-            messageContent.appendChild(answerLine);
-            const textSpan = document.createElement('span');
-            answerLine.appendChild(textSpan);
+            // Container for the formatted streamed answer
+            const answerContainer = document.createElement('div');
+            answerContainer.className = 'answer-line';
+            answerContainer.style.marginBottom = '8px';
+            messageContent.appendChild(answerContainer);
 
+            // Source bubble and action row, hidden until streaming finishes
             const sourceBubble = document.createElement('span');
             sourceBubble.className = 'source-bubble';
-            sourceBubble.innerHTML = '&#128279; ' + responseObj.sourceLabel;
+            sourceBubble.innerHTML = '&#128279; ' + chosenSource;
             sourceBubble.style.visibility = 'hidden';
             sourceBubble.addEventListener('click', () => {
                 if (!hasClickedSource) {
                     hasClickedSource = true;
-                    trackEvent({ type: 'source_click', topic: responseObj.topic, sourceLabel: responseObj.sourceLabel });
+                    trackEvent({ type: 'source_click', topic: responseObj.topic, sourceLabel: chosenSource });
                 }
                 showModal('This function is not available at this time.');
             });
-            answerLine.appendChild(sourceBubble);
+            messageContent.appendChild(sourceBubble);
 
             const verifyPill = null;
             const actionRow = buildActionRow(responseObj.answer, responseObj.topic, verifyPill);
             actionRow.style.visibility = 'hidden';
             messageContent.appendChild(actionRow);
 
-            await streamText(textSpan, responseObj.answer);
+            await streamFormattedAnswer(answerContainer, responseObj.answer);
             sourceBubble.style.visibility = 'visible';
             actionRow.style.visibility = 'visible';
             chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -391,7 +432,8 @@
                 type: 'chat_response',
                 topic: responseObj.topic,
                 userMessage: responseObj.question,
-                responseType: 'scripted'
+                responseType: 'scripted',
+                sourceLabel: chosenSource
             });
         }
 
