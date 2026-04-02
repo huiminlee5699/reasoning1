@@ -328,7 +328,7 @@
             const sourceTriggers = new Set();
             let cursor = 0;
             while (cursor < eligibleBlockIndices.length) {
-                cursor += (Math.random() < 0.5 ? 2 : 3);
+                cursor += (Math.random() < 0.5 ? 1 : 2);
                 if (cursor <= eligibleBlockIndices.length) {
                     sourceTriggers.add(eligibleBlockIndices[cursor - 1]);
                 }
