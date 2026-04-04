@@ -274,8 +274,8 @@
 
         function showModal(msg) { modalMessage.textContent = msg; modalOverlay.classList.add('active'); }
         function closeModal()    { modalOverlay.classList.remove('active'); }
-        modalCloseBtn.addEventListener('click', closeModal);
-        modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
+        modalCloseBtn.addEventListener('click', e => { e.stopPropagation(); closeModal(); });
+        modalOverlay.addEventListener('click', e => { e.stopPropagation(); if (e.target === modalOverlay) closeModal(); });
 
         // Lock the input bar permanently after scripted response is received
         function lockInput() {
@@ -525,24 +525,6 @@
             scriptedTopic = responseObj.topic;
             lockInput();
 
-            // Log 0 baselines ONLY if participant has not already clicked during streaming
-            // These are the definitive non-click records; if clicked, only the 1 exists
-            if (!hasClickedSource) {
-                trackEvent({
-                    type:        'source_click',
-                    topic:       responseObj.topic,
-                    clicked:     0,
-                    sourceLabel: ''
-                });
-            }
-            if (!hasClickedShare && CONDITION === 'sourcelink') {
-                trackEvent({
-                    type:    'share_click',
-                    topic:   responseObj.topic,
-                    clicked: 0
-                });
-            }
-
             await delay(200);
             trackEvent({
                 type: 'chat_response',
@@ -550,6 +532,27 @@
                 userMessage: responseObj.question,
                 responseType: 'scripted'
             });
+
+            // Log 0 baselines after a delay so any click that happened right as
+            // streaming ended has time to set the flags before we check them.
+            await delay(500);
+            if (CONDITION === 'sourcelink') {
+                if (!hasClickedSource) {
+                    trackEvent({
+                        type:        'source_click',
+                        topic:       responseObj.topic,
+                        clicked:     0,
+                        sourceLabel: ''
+                    });
+                }
+                if (!hasClickedShare) {
+                    trackEvent({
+                        type:    'share_click',
+                        topic:   responseObj.topic,
+                        clicked: 0
+                    });
+                }
+            }
         }
 
         // Simple typing indicator for short non-scripted responses
