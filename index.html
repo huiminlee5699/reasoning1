@@ -307,10 +307,10 @@
                     const inner = part.slice(2, -2);
                     const node = document.createTextNode('');
                     strong.appendChild(node);
-                    for (let i = 0; i < inner.length; i += 4) {
-                        node.textContent += inner.slice(i, i + 4);
+                    for (let i = 0; i < inner.length; i++) {
+                        node.textContent += inner[i];
                         chatContainer.scrollTop = chatContainer.scrollHeight;
-                        await delay(Math.random() * 8);
+                        await delay(30 + Math.random() * 50);
                     }
                 } else if (part) {
                     const node = document.createTextNode('');
