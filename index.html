@@ -464,9 +464,11 @@
             shareBtn.className = 'icon-btn';
             shareBtn.innerHTML = SHARE_SVG + '<span class="tooltip">Share response</span>';
             shareBtn.addEventListener('click', () => {
-                if (!hasClickedShare) {
+                if (!hasClickedShare && CONDITION === 'sourcelink') {
                     hasClickedShare = true;
                     trackEvent({ type: 'share_click', topic, clicked: 1 });
+                } else if (!hasClickedShare) {
+                    hasClickedShare = true;
                 }
                 showModal('This function is not available at this time.');
             });
@@ -502,15 +504,15 @@
             messageContent.appendChild(actionRow);
 
             const onSourceClick = (sourceName) => {
-                if (!hasClickedSource) {
-                    hasClickedSource = true;
-                    trackEvent({
-                        type:        'source_click',
-                        topic:       responseObj.topic,
-                        clicked:     1,
-                        sourceLabel: sourceName
-                    });
-                }
+                // Guard: only log once ever, using a module-level flag
+                if (hasClickedSource) { showModal('This function is not available at this time.'); return; }
+                hasClickedSource = true;
+                trackEvent({
+                    type:        'source_click',
+                    topic:       responseObj.topic,
+                    clicked:     1,
+                    sourceLabel: sourceName
+                });
                 showModal('This function is not available at this time.');
             };
 
@@ -523,9 +525,23 @@
             scriptedTopic = responseObj.topic;
             lockInput();
 
-            // Immediately log a 0 baseline for source clicks and share clicks (sourcelink condition)
-            logZeroIfSourcelink(responseObj.topic);
-            logZeroShareIfSourcelink(responseObj.topic);
+            // Log 0 baselines ONLY if participant has not already clicked during streaming
+            // These are the definitive non-click records; if clicked, only the 1 exists
+            if (!hasClickedSource) {
+                trackEvent({
+                    type:        'source_click',
+                    topic:       responseObj.topic,
+                    clicked:     0,
+                    sourceLabel: ''
+                });
+            }
+            if (!hasClickedShare && CONDITION === 'sourcelink') {
+                trackEvent({
+                    type:    'share_click',
+                    topic:   responseObj.topic,
+                    clicked: 0
+                });
+            }
 
             await delay(200);
             trackEvent({
@@ -564,35 +580,7 @@
             trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'redirect' });
         }
 
-        // Log a 0 immediately after scripted response finishes streaming (sourcelink condition only).
-        // Guard: only fires once, and never if the participant has already clicked a source bubble.
-        // If the participant later clicks a source bubble, a separate clicked=1 row is also logged.
-        // In analysis: any session with a clicked=1 row = clicked; only clicked=0 = did not click.
-        let zeroSourceLogged = false;
-        function logZeroIfSourcelink(topic) {
-            if (CONDITION !== 'sourcelink') return;
-            if (zeroSourceLogged || hasClickedSource) return;
-            zeroSourceLogged = true;
-            trackEvent({
-                type:        'source_click',
-                topic:       topic,
-                clicked:     0,
-                sourceLabel: ''
-            });
-        }
 
-        // Log a 0 for share clicks immediately after scripted response finishes (sourcelink condition only).
-        let zeroShareLogged = false;
-        function logZeroShareIfSourcelink(topic) {
-            if (CONDITION !== 'sourcelink') return;
-            if (zeroShareLogged || hasClickedShare) return;
-            zeroShareLogged = true;
-            trackEvent({
-                type:       'share_click',
-                topic:      topic,
-                clicked:    0
-            });
-        }
 
         async function sendMessage() {
             if (isProcessing || messageInput.disabled) return;
