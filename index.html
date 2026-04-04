@@ -544,16 +544,21 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        async function handleGreeting(messageContent) {
+        async function handleGreeting(messageContent, userMessage) {
             await showTypingThenRespond(messageContent, 'Hi, how may I help you today?');
+            // Log greeting exchange
+            trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'greeting' });
         }
 
-        async function handleOtherMessage(messageContent) {
+        async function handleOtherMessage(messageContent, userMessage) {
             await showTypingThenRespond(messageContent, 'Please type in your assigned prompt.');
+            // Log redirect exchange
+            trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'redirect' });
         }
 
-        // FIX 3: send a 0 on page unload if conditions are met
-        window.addEventListener('beforeunload', () => {
+        // FIX 3: send a 0 on page unload using synchronous XHR (more reliable than
+        // sendBeacon for Google Apps Script which uses 302 redirects that beacon won't follow)
+        function sendZeroOnUnload() {
             const shouldLog = (
                 CONDITION === 'sourcelink' &&
                 hasReceivedScriptedResponse &&
@@ -561,7 +566,7 @@
             );
             if (!shouldLog) return;
             const payload = JSON.stringify([{
-                type: 'source_click',
+                type:          'source_click',
                 participantId: PARTICIPANT_ID,
                 sessionId:     SESSION_ID,
                 condition:     CONDITION,
@@ -571,11 +576,23 @@
                 sinceLoadMs:   sinceLoad(),
                 userAgent:     navigator.userAgent
             }]);
-            navigator.sendBeacon(
-                APPS_SCRIPT_URL,
-                new Blob([payload], { type: 'text/plain' })
-            );
-        });
+            // Try sendBeacon first, fall back to synchronous XHR
+            const sent = navigator.sendBeacon
+                ? navigator.sendBeacon(APPS_SCRIPT_URL, new Blob([payload], { type: 'text/plain' }))
+                : false;
+            if (!sent) {
+                try {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', APPS_SCRIPT_URL, false); // false = synchronous
+                    xhr.setRequestHeader('Content-Type', 'text/plain');
+                    xhr.send(payload);
+                } catch (e) { /* best effort */ }
+            }
+        }
+
+        window.addEventListener('beforeunload', sendZeroOnUnload);
+        // pagehide fires more reliably on mobile and in iframes
+        window.addEventListener('pagehide', sendZeroOnUnload);
 
         async function sendMessage() {
             if (isProcessing || messageInput.disabled) return;
@@ -596,12 +613,14 @@
                 trackEvent({ type: 'chat_submit', topic: matched.topic, userMessage: message, isTriggerQuestion: true });
                 await handleTriggerQuestion(content, matched);
             } else if (!hasGreeted) {
-                // First non-matching message → treat as greeting, no logging
+                // First non-matching message → treat as greeting, log it
                 hasGreeted = true;
-                await handleGreeting(content);
+                trackEvent({ type: 'chat_submit', topic: null, userMessage: message, isTriggerQuestion: false });
+                await handleGreeting(content, message);
             } else {
-                // Second+ non-matching message → redirect, no logging
-                await handleOtherMessage(content);
+                // Second+ non-matching message → redirect, log it
+                trackEvent({ type: 'chat_submit', topic: null, userMessage: message, isTriggerQuestion: false });
+                await handleOtherMessage(content, message);
             }
 
             isProcessing = false;
