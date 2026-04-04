@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChatGPT</title>
+    <title>Chatbot</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f7f7f8; color: #374151; height: 100vh; display: flex; }
@@ -40,8 +40,6 @@
         .icon-btn svg { width: 22px; height: 22px; display: block; }
         .icon-btn .tooltip { display: none; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: #374151; color: white; font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; }
         .icon-btn:hover .tooltip { display: block; }
-        .verify-bubble { display: inline-flex; align-items: center; gap: 6px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 20px; padding: 3px 10px; font-size: 12px; color: #374151; transition: background-color 0.2s, border-color 0.2s; cursor: pointer; white-space: nowrap; }
-        .verify-bubble:hover { background-color: #e5e7eb; border-color: #d1d5db; }
         .prompt-reminder { color: #6b7280; font-size: 14px; font-style: italic; padding: 4px 0; }
         .input-container { position: sticky; bottom: 0; background-color: #f7f7f8; padding: 20px; max-width: 768px; width: 100%; margin: 0 auto; }
         .input-wrapper { position: relative; background-color: white; border-radius: 24px; border: 1px solid #d1d5db; display: flex; align-items: flex-end; padding: 12px; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); min-height: 56px; }
@@ -85,7 +83,6 @@
         <div class="sidebar-items">
             <div class="sidebar-item" onclick="showModal('You do not have any saved chats yet.')">&#128269; <span class="sidebar-label">Search chats</span></div>
             <div class="sidebar-item" onclick="showModal('This function is not available at this time.')">&#128218; <span class="sidebar-label">Library</span></div>
-            <div class="sidebar-item" onclick="showModal('This function is not available at this time.')">&#9881;&#65039; <span class="sidebar-label">GPTs</span></div>
         </div>
         <div style="margin-top:auto;padding-top:16px;border-top:1px solid #d1d5db;">
             <div class="sidebar-item">
@@ -102,7 +99,7 @@
         </div>
         <div class="input-container">
             <div class="input-wrapper">
-                <textarea id="messageInput" class="input-field" placeholder="Message ChatGPT" rows="1"></textarea>
+                <textarea id="messageInput" class="input-field" placeholder="Type your prompt here" rows="1"></textarea>
                 <button id="sendBtn" class="send-btn" disabled>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -134,8 +131,6 @@
         const CONDITION      = urlParams.get('condition') || 'unknown';
         const SESSION_ID     = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
         const PAGE_LOAD_TIME = Date.now();
-        let sourceClickCount = 0;
-        let verifyClickCount = 0;
 
         function sinceLoad() { return Date.now() - PAGE_LOAD_TIME; }
 
@@ -329,49 +324,52 @@
             }
         }
 
+        // Returns true if a block is a "Bottom line" bold header
+        function isBottomLineHeader(block) {
+            return /^\*\*\s*bottom line\s*\*\*$/i.test(block.trim());
+        }
+
         async function streamFormattedAnswer(container, text, onSourceClick) {
             const BUBBLE_COUNT = 4;
             const fourSources = getFourUniqueSources();
 
             const blocks = text.split(/\n\n+/);
 
-            // Collect eligible block indices (non-empty, non-bold-header-only)
+            // Find the index of the Bottom line header block (if any)
+            let bottomLineBlockIndex = -1;
+            for (let i = 0; i < blocks.length; i++) {
+                if (isBottomLineHeader(blocks[i])) {
+                    bottomLineBlockIndex = i;
+                    break;
+                }
+            }
+
+            // Collect eligible block indices:
+            // - not a bold header (headers never get bubbles)
+            // - not at or after the Bottom line header index
             const eligibleBlockIndices = [];
             blocks.forEach((b, i) => {
                 const trimmed = b.trim();
                 if (!trimmed) return;
                 const isHeader = /^\*\*[^*]+\*\*$/.test(trimmed);
-                if (!isHeader) eligibleBlockIndices.push(i);
+                if (isHeader) return; // headers never get bubbles
+                if (bottomLineBlockIndex !== -1 && i >= bottomLineBlockIndex) return; // Bottom line section excluded
+                eligibleBlockIndices.push(i);
             });
 
             const totalEligible = eligibleBlockIndices.length;
 
-            // Distribute 4 bubbles across eligible blocks as evenly as possible.
-            // We assign each bubble to an eligible block index by spacing them out.
-            // If there are fewer than 4 eligible blocks, multiple bubbles go on the same block.
-            // bubbleAssignments[eligibleIndex] = array of source labels for that block
+            // Distribute 4 bubbles across eligible blocks as evenly as possible
             const bubbleAssignments = {};
 
-            if (totalEligible === 0) {
-                // Edge case: no eligible blocks — nothing to attach to
-            } else if (totalEligible >= BUBBLE_COUNT) {
-                // Space bubbles evenly across eligible blocks
-                // Place bubbles at positions: round(i * (totalEligible-1) / (BUBBLE_COUNT-1)) for i=0..3
+            if (totalEligible > 0) {
                 for (let b = 0; b < BUBBLE_COUNT; b++) {
                     let idx;
-                    if (BUBBLE_COUNT === 1) {
-                        idx = totalEligible - 1;
+                    if (BUBBLE_COUNT === 1 || totalEligible === 1) {
+                        idx = 0;
                     } else {
                         idx = Math.round(b * (totalEligible - 1) / (BUBBLE_COUNT - 1));
                     }
-                    if (!bubbleAssignments[idx]) bubbleAssignments[idx] = [];
-                    bubbleAssignments[idx].push(fourSources[b]);
-                }
-            } else {
-                // Fewer eligible blocks than bubbles — distribute as evenly as possible
-                // Assign bubbles round-robin to eligible block slots
-                for (let b = 0; b < BUBBLE_COUNT; b++) {
-                    const idx = Math.round(b * (totalEligible - 1) / (BUBBLE_COUNT - 1));
                     if (!bubbleAssignments[idx]) bubbleAssignments[idx] = [];
                     bubbleAssignments[idx].push(fourSources[b]);
                 }
@@ -388,19 +386,20 @@
                 const isHeader = /^\*\*[^*]+\*\*$/.test(block);
                 const isList = lines.every(l => /^[-*]\s/.test(l.trim()) || l.trim() === '');
 
-                // Determine if this block is eligible and get its assigned bubbles
-                const isEligible = !isHeader;
+                // Determine if this block is eligible for bubbles
+                const isEligible = !isHeader && !(bottomLineBlockIndex !== -1 && b >= bottomLineBlockIndex);
                 const currentEligibleIdx = isEligible ? eligibleCounter : null;
                 const assignedBubbles = (isEligible && bubbleAssignments[currentEligibleIdx]) ? bubbleAssignments[currentEligibleIdx] : [];
                 if (isEligible) eligibleCounter++;
 
-                // Helper to append bubbles to a given element
+                // Helper to append assigned bubbles to a given element
                 const appendBubbles = (el) => {
                     for (const sourceName of assignedBubbles) {
                         const bubble = document.createElement('span');
                         bubble.className = 'source-bubble';
                         bubble.innerHTML = '&#128279; ' + sourceName;
-                        bubble.addEventListener('click', onSourceClick);
+                        // FIX #1: pass the specific sourceName clicked to the event handler
+                        bubble.addEventListener('click', () => onSourceClick(sourceName));
                         el.appendChild(bubble);
                     }
                 };
@@ -450,7 +449,6 @@
             const row = document.createElement('div');
             row.className = 'action-row';
 
-            // Copy button
             const copyBtn = document.createElement('button');
             copyBtn.className = 'icon-btn';
             const setCopyDefault = () => copyBtn.innerHTML = COPY_SVG + '<span class="tooltip">Copy response</span>';
@@ -461,7 +459,6 @@
                 setTimeout(setCopyDefault, 1500);
             });
 
-            // Share button
             let hasClickedShare = false;
             const shareBtn = document.createElement('button');
             shareBtn.className = 'icon-btn';
@@ -508,10 +505,15 @@
             actionRow.style.visibility = 'hidden';
             messageContent.appendChild(actionRow);
 
-            const onSourceClick = () => {
+            // FIX #1: onSourceClick now receives the specific source name that was clicked
+            const onSourceClick = (sourceName) => {
                 if (!hasClickedSource) {
                     hasClickedSource = true;
-                    trackEvent({ type: 'source_click', topic: responseObj.topic });
+                    trackEvent({
+                        type: 'source_click',
+                        topic: responseObj.topic,
+                        sourceLabel: sourceName
+                    });
                 }
                 showModal('This function is not available at this time.');
             };
