@@ -261,6 +261,7 @@
         let hasReceivedScriptedResponse = false;
         let hasGreeted = false;
         let hasClickedSource = false;
+        let hasClickedShare = false;
         let scriptedTopic = null;
 
         const messageInput  = document.getElementById('messageInput');
@@ -464,7 +465,10 @@
             shareBtn.className = 'icon-btn';
             shareBtn.innerHTML = SHARE_SVG + '<span class="tooltip">Share response</span>';
             shareBtn.addEventListener('click', () => {
-                if (!hasClickedShare) { hasClickedShare = true; trackEvent({ type: 'share_click', topic }); }
+                if (!hasClickedShare) {
+                    hasClickedShare = true;
+                    trackEvent({ type: 'share_click', topic, clicked: 1 });
+                }
                 showModal('This function is not available at this time.');
             });
             row.appendChild(copyBtn);
@@ -520,8 +524,9 @@
             scriptedTopic = responseObj.topic;
             lockInput();
 
-            // Immediately log a 0 baseline for sourcelink condition
+            // Immediately log a 0 baseline for source clicks and share clicks (sourcelink condition)
             logZeroIfSourcelink(responseObj.topic);
+            logZeroShareIfSourcelink(responseObj.topic);
 
             await delay(200);
             trackEvent({
@@ -561,15 +566,32 @@
         }
 
         // Log a 0 immediately after scripted response finishes streaming (sourcelink condition only).
+        // Guard: only fires once, and never if the participant has already clicked a source bubble.
         // If the participant later clicks a source bubble, a separate clicked=1 row is also logged.
         // In analysis: any session with a clicked=1 row = clicked; only clicked=0 = did not click.
+        let zeroSourceLogged = false;
         function logZeroIfSourcelink(topic) {
             if (CONDITION !== 'sourcelink') return;
+            if (zeroSourceLogged || hasClickedSource) return;
+            zeroSourceLogged = true;
             trackEvent({
                 type:        'source_click',
                 topic:       topic,
                 clicked:     0,
                 sourceLabel: ''
+            });
+        }
+
+        // Log a 0 for share clicks immediately after scripted response finishes (sourcelink condition only).
+        let zeroShareLogged = false;
+        function logZeroShareIfSourcelink(topic) {
+            if (CONDITION !== 'sourcelink') return;
+            if (zeroShareLogged || hasClickedShare) return;
+            zeroShareLogged = true;
+            trackEvent({
+                type:       'share_click',
+                topic:      topic,
+                clicked:    0
             });
         }
 
