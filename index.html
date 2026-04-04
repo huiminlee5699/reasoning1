@@ -269,6 +269,14 @@
         function autoResize() { messageInput.style.height = 'auto'; messageInput.style.height = messageInput.scrollHeight + 'px'; }
         function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+        const SOURCES = ['NewsWeek', 'Reddit', 'Straight Arrow News', 'Ground News', 'Truthout', 'Our World in Data'];
+
+        // Returns exactly 4 unique sources shuffled from the SOURCES array
+        function getFourUniqueSources() {
+            const shuffled = [...SOURCES].sort(() => Math.random() - 0.5);
+            return shuffled.slice(0, 4);
+        }
+
         function addUserMessage(content) {
             const ws = document.getElementById('welcomeScreen');
             if (ws) ws.classList.add('hidden');
@@ -293,9 +301,6 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
             return content;
         }
-
-        const SOURCES = ['NewsWeek', 'Reddit', 'Straight Arrow News', 'Ground News', 'Truthout', 'Our World in Data'];
-        function randomSource() { return SOURCES[Math.floor(Math.random() * SOURCES.length)]; }
 
         // Stream text with **bold** inline markers into an element char by char
         async function streamMarkdownTextInto(el, text) {
@@ -324,10 +329,13 @@
             }
         }
 
-        async function streamFormattedAnswer(container, text, chosenSource, onSourceClick) {
+        async function streamFormattedAnswer(container, text, onSourceClick) {
+            const BUBBLE_COUNT = 4;
+            const fourSources = getFourUniqueSources();
+
             const blocks = text.split(/\n\n+/);
 
-            // Eligible blocks = paragraphs OR bullet lists (not bold-only headers)
+            // Collect eligible block indices (non-empty, non-bold-header-only)
             const eligibleBlockIndices = [];
             blocks.forEach((b, i) => {
                 const trimmed = b.trim();
@@ -336,19 +344,41 @@
                 if (!isHeader) eligibleBlockIndices.push(i);
             });
 
-            // Pre-determine which eligible blocks get a source bubble, every 2 or 3
-            const sourceTriggers = new Set();
-            let cursor = 0;
-            while (cursor < eligibleBlockIndices.length) {
-                cursor += (Math.random() < 0.5 ? 1 : 2);
-                if (cursor <= eligibleBlockIndices.length) {
-                    sourceTriggers.add(eligibleBlockIndices[cursor - 1]);
+            const totalEligible = eligibleBlockIndices.length;
+
+            // Distribute 4 bubbles across eligible blocks as evenly as possible.
+            // We assign each bubble to an eligible block index by spacing them out.
+            // If there are fewer than 4 eligible blocks, multiple bubbles go on the same block.
+            // bubbleAssignments[eligibleIndex] = array of source labels for that block
+            const bubbleAssignments = {};
+
+            if (totalEligible === 0) {
+                // Edge case: no eligible blocks — nothing to attach to
+            } else if (totalEligible >= BUBBLE_COUNT) {
+                // Space bubbles evenly across eligible blocks
+                // Place bubbles at positions: round(i * (totalEligible-1) / (BUBBLE_COUNT-1)) for i=0..3
+                for (let b = 0; b < BUBBLE_COUNT; b++) {
+                    let idx;
+                    if (BUBBLE_COUNT === 1) {
+                        idx = totalEligible - 1;
+                    } else {
+                        idx = Math.round(b * (totalEligible - 1) / (BUBBLE_COUNT - 1));
+                    }
+                    if (!bubbleAssignments[idx]) bubbleAssignments[idx] = [];
+                    bubbleAssignments[idx].push(fourSources[b]);
+                }
+            } else {
+                // Fewer eligible blocks than bubbles — distribute as evenly as possible
+                // Assign bubbles round-robin to eligible block slots
+                for (let b = 0; b < BUBBLE_COUNT; b++) {
+                    const idx = Math.round(b * (totalEligible - 1) / (BUBBLE_COUNT - 1));
+                    if (!bubbleAssignments[idx]) bubbleAssignments[idx] = [];
+                    bubbleAssignments[idx].push(fourSources[b]);
                 }
             }
-            // Always ensure the last eligible block has a bubble
-            if (eligibleBlockIndices.length > 0) {
-                sourceTriggers.add(eligibleBlockIndices[eligibleBlockIndices.length - 1]);
-            }
+
+            // Track which eligible block index we're on
+            let eligibleCounter = 0;
 
             for (let b = 0; b < blocks.length; b++) {
                 const block = blocks[b].trim();
@@ -358,8 +388,24 @@
                 const isHeader = /^\*\*[^*]+\*\*$/.test(block);
                 const isList = lines.every(l => /^[-*]\s/.test(l.trim()) || l.trim() === '');
 
+                // Determine if this block is eligible and get its assigned bubbles
+                const isEligible = !isHeader;
+                const currentEligibleIdx = isEligible ? eligibleCounter : null;
+                const assignedBubbles = (isEligible && bubbleAssignments[currentEligibleIdx]) ? bubbleAssignments[currentEligibleIdx] : [];
+                if (isEligible) eligibleCounter++;
+
+                // Helper to append bubbles to a given element
+                const appendBubbles = (el) => {
+                    for (const sourceName of assignedBubbles) {
+                        const bubble = document.createElement('span');
+                        bubble.className = 'source-bubble';
+                        bubble.innerHTML = '&#128279; ' + sourceName;
+                        bubble.addEventListener('click', onSourceClick);
+                        el.appendChild(bubble);
+                    }
+                };
+
                 if (isHeader) {
-                    // Bold header — no source bubble
                     const h = document.createElement('p');
                     h.style.cssText = 'margin: 14px 0 4px 0; line-height: 1.7;';
                     container.appendChild(h);
@@ -384,34 +430,23 @@
                         li.style.cssText = 'margin-bottom: 4px; line-height: 1.7;';
                         ul.appendChild(li);
                         await streamMarkdownTextInto(li, trimmed.replace(/^[-*]\s+/, ''));
-                        // Append source bubble inline on the last bullet of this block if triggered
-                        if (li_i === nonEmptyLines.length - 1 && sourceTriggers.has(b)) {
-                            const bubble = document.createElement('span');
-                            bubble.className = 'source-bubble';
-                            bubble.innerHTML = '&#128279; ' + randomSource();
-                            bubble.addEventListener('click', onSourceClick);
-                            li.appendChild(bubble);
+                        // Append all assigned bubbles on the last bullet of this list block
+                        if (li_i === nonEmptyLines.length - 1) {
+                            appendBubbles(li);
                         }
                     }
                 } else {
-                    // Regular paragraph — may contain inline **bold**
                     const p = document.createElement('p');
                     p.style.cssText = 'margin-bottom: 10px; line-height: 1.7;';
                     container.appendChild(p);
                     await streamMarkdownTextInto(p, lines.join(' '));
-                    if (sourceTriggers.has(b)) {
-                        const bubble = document.createElement('span');
-                        bubble.className = 'source-bubble';
-                        bubble.innerHTML = '&#128279; ' + randomSource();
-                        bubble.addEventListener('click', onSourceClick);
-                        p.appendChild(bubble);
-                    }
+                    appendBubbles(p);
                 }
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
         }
 
-        function buildActionRow(answerText, topic, extraPill) {
+        function buildActionRow(answerText, topic) {
             const row = document.createElement('div');
             row.className = 'action-row';
 
@@ -441,15 +476,12 @@
 
             row.appendChild(copyBtn);
             row.appendChild(shareBtn);
-            if (extraPill) row.appendChild(extraPill);
             row.getShareClicked = () => hasClickedShare ? 1 : 0;
             return row;
         }
 
-
         async function handleTriggerQuestion(messageContent, responseObj) {
             let hasClickedSource = false;
-            const chosenSource = randomSource();
 
             const dots = document.createElement('div');
             dots.className = 'typing-indicator';
@@ -467,26 +499,24 @@
             await delay(2000);
             searching.remove();
 
-            // Container for the formatted streamed answer
             const answerContainer = document.createElement('div');
             answerContainer.className = 'answer-line';
             answerContainer.style.marginBottom = '8px';
             messageContent.appendChild(answerContainer);
 
-            const verifyPill = null;
-            const actionRow = buildActionRow(responseObj.answer, responseObj.topic, verifyPill);
+            const actionRow = buildActionRow(responseObj.answer, responseObj.topic);
             actionRow.style.visibility = 'hidden';
             messageContent.appendChild(actionRow);
 
             const onSourceClick = () => {
                 if (!hasClickedSource) {
                     hasClickedSource = true;
-                    trackEvent({ type: 'source_click', topic: responseObj.topic, sourceLabel: chosenSource });
+                    trackEvent({ type: 'source_click', topic: responseObj.topic });
                 }
                 showModal('This function is not available at this time.');
             };
 
-            await streamFormattedAnswer(answerContainer, responseObj.answer, chosenSource, onSourceClick);
+            await streamFormattedAnswer(answerContainer, responseObj.answer, onSourceClick);
             actionRow.style.visibility = 'visible';
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
@@ -495,11 +525,9 @@
                 type: 'chat_response',
                 topic: responseObj.topic,
                 userMessage: responseObj.question,
-                responseType: 'scripted',
-                sourceLabel: chosenSource
+                responseType: 'scripted'
             });
         }
-
 
         async function handleOtherMessage(messageContent, userMessage) {
             const dots = document.createElement('div');
