@@ -502,8 +502,9 @@
                 if (!hasClickedSource) {
                     hasClickedSource = true;
                     trackEvent({
-                        type: 'source_click',
-                        topic: responseObj.topic,
+                        type:        'source_click',
+                        topic:       responseObj.topic,
+                        clicked:     1,
                         sourceLabel: sourceName
                     });
                 }
@@ -518,6 +519,9 @@
             hasReceivedScriptedResponse = true;
             scriptedTopic = responseObj.topic;
             lockInput();
+
+            // Immediately log a 0 baseline for sourcelink condition
+            logZeroIfSourcelink(responseObj.topic);
 
             await delay(200);
             trackEvent({
@@ -556,43 +560,18 @@
             trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'redirect' });
         }
 
-        // FIX 3: send a 0 on page unload using synchronous XHR (more reliable than
-        // sendBeacon for Google Apps Script which uses 302 redirects that beacon won't follow)
-        function sendZeroOnUnload() {
-            const shouldLog = (
-                CONDITION === 'sourcelink' &&
-                hasReceivedScriptedResponse &&
-                !hasClickedSource
-            );
-            if (!shouldLog) return;
-            const payload = JSON.stringify([{
-                type:          'source_click',
-                participantId: PARTICIPANT_ID,
-                sessionId:     SESSION_ID,
-                condition:     CONDITION,
-                topic:         scriptedTopic,
-                clicked:       0,
-                sourceLabel:   '',
-                sinceLoadMs:   sinceLoad(),
-                userAgent:     navigator.userAgent
-            }]);
-            // Try sendBeacon first, fall back to synchronous XHR
-            const sent = navigator.sendBeacon
-                ? navigator.sendBeacon(APPS_SCRIPT_URL, new Blob([payload], { type: 'text/plain' }))
-                : false;
-            if (!sent) {
-                try {
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('POST', APPS_SCRIPT_URL, false); // false = synchronous
-                    xhr.setRequestHeader('Content-Type', 'text/plain');
-                    xhr.send(payload);
-                } catch (e) { /* best effort */ }
-            }
+        // Log a 0 immediately after scripted response finishes streaming (sourcelink condition only).
+        // If the participant later clicks a source bubble, a separate clicked=1 row is also logged.
+        // In analysis: any session with a clicked=1 row = clicked; only clicked=0 = did not click.
+        function logZeroIfSourcelink(topic) {
+            if (CONDITION !== 'sourcelink') return;
+            trackEvent({
+                type:        'source_click',
+                topic:       topic,
+                clicked:     0,
+                sourceLabel: ''
+            });
         }
-
-        window.addEventListener('beforeunload', sendZeroOnUnload);
-        // pagehide fires more reliably on mobile and in iframes
-        window.addEventListener('pagehide', sendZeroOnUnload);
 
         async function sendMessage() {
             if (isProcessing || messageInput.disabled) return;
