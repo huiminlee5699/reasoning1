@@ -43,8 +43,10 @@
         .prompt-reminder { color: #6b7280; font-size: 14px; font-style: italic; padding: 4px 0; }
         .input-container { position: sticky; bottom: 0; background-color: #f7f7f8; padding: 20px; max-width: 768px; width: 100%; margin: 0 auto; }
         .input-wrapper { position: relative; background-color: white; border-radius: 24px; border: 1px solid #d1d5db; display: flex; align-items: flex-end; padding: 12px; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); min-height: 56px; }
+        .input-wrapper.locked { background-color: #f3f4f6; border-color: #e5e7eb; box-shadow: none; }
         .input-field { flex: 1; background: transparent; border: none; color: #374151; font-size: 16px; resize: none; outline: none; min-height: 24px; max-height: 200px; line-height: 1.5; padding: 8px 12px; }
         .input-field::placeholder { color: #9ca3af; }
+        .input-field:disabled { color: #9ca3af; cursor: not-allowed; }
         .send-btn { background-color: #10a37f; border: none; border-radius: 50%; padding: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; width: 32px; height: 32px; }
         .send-btn:disabled { background-color: #d1d5db; cursor: not-allowed; }
         .hidden { display: none; }
@@ -66,7 +68,6 @@
         .sidebar.collapsed .user-label { display: none; }
         .sidebar-toggle { background: none; border: none; cursor: pointer; padding: 8px; border-radius: 6px; color: #374151; font-size: 18px; align-self: flex-end; margin-bottom: 4px; }
         .sidebar-toggle:hover { background-color: #e5e7eb; }
-
     </style>
 </head>
 <body>
@@ -77,7 +78,9 @@
             <button class="modal-close-btn" id="modalCloseBtn">Close</button>
         </div>
     </div>
-    <div class="sidebar">
+
+    <!-- FIX 1: sidebar starts with 'collapsed' class -->
+    <div class="sidebar collapsed">
         <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">&#9776;</button>
         <button class="new-chat-btn"><span>+</span> <span class="new-chat-label">New chat</span></button>
         <div class="sidebar-items">
@@ -91,6 +94,7 @@
             </div>
         </div>
     </div>
+
     <div class="main-content">
         <div class="chat-container" id="chatContainer">
             <div class="welcome-screen" id="welcomeScreen">
@@ -98,7 +102,7 @@
             </div>
         </div>
         <div class="input-container">
-            <div class="input-wrapper">
+            <div class="input-wrapper" id="inputWrapper">
                 <textarea id="messageInput" class="input-field" placeholder="Type your prompt here" rows="1"></textarea>
                 <button id="sendBtn" class="send-btn" disabled>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -248,9 +252,21 @@
         const RESPONSE_MAP = new Map(SCRIPTED_RESPONSES.map(r => [r.question.toLowerCase().trim(), r]));
 
         let isProcessing = false;
+
+        // --- Conversation state ---
+        // hasReceivedScriptedResponse: true once a scripted answer has finished streaming
+        // hasGreeted: true once the first non-matching message has been handled as a greeting
+        // hasClickedSource: true once a source bubble has been clicked
+        // scriptedTopic: the topic of the scripted response received
+        let hasReceivedScriptedResponse = false;
+        let hasGreeted = false;
+        let hasClickedSource = false;
+        let scriptedTopic = null;
+
         const messageInput  = document.getElementById('messageInput');
         const sendBtn       = document.getElementById('sendBtn');
         const chatContainer = document.getElementById('chatContainer');
+        const inputWrapper  = document.getElementById('inputWrapper');
         const modalOverlay  = document.getElementById('modalOverlay');
         const modalMessage  = document.getElementById('modalMessage');
         const modalCloseBtn = document.getElementById('modalCloseBtn');
@@ -260,13 +276,23 @@
         modalCloseBtn.addEventListener('click', closeModal);
         modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
 
-        function updateSendButton() { sendBtn.disabled = !messageInput.value.trim() || isProcessing; }
+        // Lock the input bar permanently after scripted response is received
+        function lockInput() {
+            messageInput.disabled = true;
+            messageInput.placeholder = '';
+            sendBtn.disabled = true;
+            inputWrapper.classList.add('locked');
+        }
+
+        function updateSendButton() {
+            if (messageInput.disabled) return;
+            sendBtn.disabled = !messageInput.value.trim() || isProcessing;
+        }
         function autoResize() { messageInput.style.height = 'auto'; messageInput.style.height = messageInput.scrollHeight + 'px'; }
         function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
         const SOURCES = ['NewsWeek', 'Reddit', 'Straight Arrow News', 'Ground News', 'Truthout', 'Our World in Data'];
 
-        // Returns exactly 4 unique sources shuffled from the SOURCES array
         function getFourUniqueSources() {
             const shuffled = [...SOURCES].sort(() => Math.random() - 0.5);
             return shuffled.slice(0, 4);
@@ -297,7 +323,6 @@
             return content;
         }
 
-        // Stream text with **bold** inline markers into an element char by char
         async function streamMarkdownTextInto(el, text) {
             const parts = text.split(/(\*\*[^*]+\*\*)/g);
             for (const part of parts) {
@@ -324,7 +349,6 @@
             }
         }
 
-        // Returns true if a block is a "Bottom line" bold header
         function isBottomLineHeader(block) {
             return /^\*\*\s*bottom line\s*\*\*$/i.test(block.trim());
         }
@@ -332,73 +356,54 @@
         async function streamFormattedAnswer(container, text, onSourceClick) {
             const BUBBLE_COUNT = 4;
             const fourSources = getFourUniqueSources();
-
             const blocks = text.split(/\n\n+/);
 
-            // Find the index of the Bottom line header block (if any)
             let bottomLineBlockIndex = -1;
             for (let i = 0; i < blocks.length; i++) {
-                if (isBottomLineHeader(blocks[i])) {
-                    bottomLineBlockIndex = i;
-                    break;
-                }
+                if (isBottomLineHeader(blocks[i])) { bottomLineBlockIndex = i; break; }
             }
 
-            // Collect eligible block indices:
-            // - not a bold header (headers never get bubbles)
-            // - not at or after the Bottom line header index
             const eligibleBlockIndices = [];
             blocks.forEach((b, i) => {
                 const trimmed = b.trim();
                 if (!trimmed) return;
                 const isHeader = /^\*\*[^*]+\*\*$/.test(trimmed);
-                if (isHeader) return; // headers never get bubbles
-                if (bottomLineBlockIndex !== -1 && i >= bottomLineBlockIndex) return; // Bottom line section excluded
+                if (isHeader) return;
+                if (bottomLineBlockIndex !== -1 && i >= bottomLineBlockIndex) return;
                 eligibleBlockIndices.push(i);
             });
 
             const totalEligible = eligibleBlockIndices.length;
-
-            // Distribute 4 bubbles across eligible blocks as evenly as possible
             const bubbleAssignments = {};
 
             if (totalEligible > 0) {
                 for (let b = 0; b < BUBBLE_COUNT; b++) {
                     let idx;
-                    if (BUBBLE_COUNT === 1 || totalEligible === 1) {
-                        idx = 0;
-                    } else {
-                        idx = Math.round(b * (totalEligible - 1) / (BUBBLE_COUNT - 1));
-                    }
+                    if (BUBBLE_COUNT === 1 || totalEligible === 1) { idx = 0; }
+                    else { idx = Math.round(b * (totalEligible - 1) / (BUBBLE_COUNT - 1)); }
                     if (!bubbleAssignments[idx]) bubbleAssignments[idx] = [];
                     bubbleAssignments[idx].push(fourSources[b]);
                 }
             }
 
-            // Track which eligible block index we're on
             let eligibleCounter = 0;
 
             for (let b = 0; b < blocks.length; b++) {
                 const block = blocks[b].trim();
                 if (!block) continue;
                 const lines = block.split('\n');
-
                 const isHeader = /^\*\*[^*]+\*\*$/.test(block);
                 const isList = lines.every(l => /^[-*]\s/.test(l.trim()) || l.trim() === '');
-
-                // Determine if this block is eligible for bubbles
                 const isEligible = !isHeader && !(bottomLineBlockIndex !== -1 && b >= bottomLineBlockIndex);
                 const currentEligibleIdx = isEligible ? eligibleCounter : null;
                 const assignedBubbles = (isEligible && bubbleAssignments[currentEligibleIdx]) ? bubbleAssignments[currentEligibleIdx] : [];
                 if (isEligible) eligibleCounter++;
 
-                // Helper to append assigned bubbles to a given element
                 const appendBubbles = (el) => {
                     for (const sourceName of assignedBubbles) {
                         const bubble = document.createElement('span');
                         bubble.className = 'source-bubble';
                         bubble.innerHTML = '&#128279; ' + sourceName;
-                        // FIX #1: pass the specific sourceName clicked to the event handler
                         bubble.addEventListener('click', () => onSourceClick(sourceName));
                         el.appendChild(bubble);
                     }
@@ -429,10 +434,7 @@
                         li.style.cssText = 'margin-bottom: 4px; line-height: 1.7;';
                         ul.appendChild(li);
                         await streamMarkdownTextInto(li, trimmed.replace(/^[-*]\s+/, ''));
-                        // Append all assigned bubbles on the last bullet of this list block
-                        if (li_i === nonEmptyLines.length - 1) {
-                            appendBubbles(li);
-                        }
+                        if (li_i === nonEmptyLines.length - 1) { appendBubbles(li); }
                     }
                 } else {
                     const p = document.createElement('p');
@@ -448,7 +450,6 @@
         function buildActionRow(answerText, topic) {
             const row = document.createElement('div');
             row.className = 'action-row';
-
             const copyBtn = document.createElement('button');
             copyBtn.className = 'icon-btn';
             const setCopyDefault = () => copyBtn.innerHTML = COPY_SVG + '<span class="tooltip">Copy response</span>';
@@ -458,28 +459,20 @@
                 copyBtn.innerHTML = CHECK_SVG + '<span class="tooltip">Copied!</span>';
                 setTimeout(setCopyDefault, 1500);
             });
-
             let hasClickedShare = false;
             const shareBtn = document.createElement('button');
             shareBtn.className = 'icon-btn';
             shareBtn.innerHTML = SHARE_SVG + '<span class="tooltip">Share response</span>';
             shareBtn.addEventListener('click', () => {
-                if (!hasClickedShare) {
-                    hasClickedShare = true;
-                    trackEvent({ type: 'share_click', topic });
-                }
+                if (!hasClickedShare) { hasClickedShare = true; trackEvent({ type: 'share_click', topic }); }
                 showModal('This function is not available at this time.');
             });
-
             row.appendChild(copyBtn);
             row.appendChild(shareBtn);
-            row.getShareClicked = () => hasClickedShare ? 1 : 0;
             return row;
         }
 
         async function handleTriggerQuestion(messageContent, responseObj) {
-            let hasClickedSource = false;
-
             const dots = document.createElement('div');
             dots.className = 'typing-indicator';
             dots.innerHTML = '<span></span><span></span><span></span>';
@@ -505,7 +498,6 @@
             actionRow.style.visibility = 'hidden';
             messageContent.appendChild(actionRow);
 
-            // FIX #1: onSourceClick now receives the specific source name that was clicked
             const onSourceClick = (sourceName) => {
                 if (!hasClickedSource) {
                     hasClickedSource = true;
@@ -522,6 +514,11 @@
             actionRow.style.visibility = 'visible';
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
+            // Mark scripted response as received and store topic, then lock input
+            hasReceivedScriptedResponse = true;
+            scriptedTopic = responseObj.topic;
+            lockInput();
+
             await delay(200);
             trackEvent({
                 type: 'chat_response',
@@ -531,7 +528,8 @@
             });
         }
 
-        async function handleOtherMessage(messageContent, userMessage) {
+        // Simple typing indicator for short non-scripted responses
+        async function showTypingThenRespond(messageContent, responseText) {
             const dots = document.createElement('div');
             dots.className = 'typing-indicator';
             dots.innerHTML = '<span></span><span></span><span></span>';
@@ -539,32 +537,73 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
             await delay(1000);
             dots.remove();
-            const reminder = document.createElement('p');
-            reminder.className = 'prompt-reminder';
-            reminder.textContent = 'Please type in the assigned prompt.';
-            messageContent.appendChild(reminder);
+            const p = document.createElement('p');
+            p.style.cssText = 'margin-bottom: 10px; line-height: 1.7;';
+            p.textContent = responseText;
+            messageContent.appendChild(p);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-            trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'redirect' });
         }
 
-        let hasSubmitted = false;
+        async function handleGreeting(messageContent) {
+            await showTypingThenRespond(messageContent, 'Hi, how may I help you today?');
+        }
+
+        async function handleOtherMessage(messageContent) {
+            await showTypingThenRespond(messageContent, 'Please type in your assigned prompt.');
+        }
+
+        // FIX 3: send a 0 on page unload if conditions are met
+        window.addEventListener('beforeunload', () => {
+            const shouldLog = (
+                CONDITION === 'sourcelink' &&
+                hasReceivedScriptedResponse &&
+                !hasClickedSource
+            );
+            if (!shouldLog) return;
+            const payload = JSON.stringify([{
+                type: 'source_click',
+                participantId: PARTICIPANT_ID,
+                sessionId:     SESSION_ID,
+                condition:     CONDITION,
+                topic:         scriptedTopic,
+                clicked:       0,
+                sourceLabel:   '',
+                sinceLoadMs:   sinceLoad(),
+                userAgent:     navigator.userAgent
+            }]);
+            navigator.sendBeacon(
+                APPS_SCRIPT_URL,
+                new Blob([payload], { type: 'text/plain' })
+            );
+        });
 
         async function sendMessage() {
-            if (isProcessing || hasSubmitted) return;
+            if (isProcessing || messageInput.disabled) return;
             const message = messageInput.value.trim();
             if (!message) return;
-            hasSubmitted = true;
+
             isProcessing = true;
-            messageInput.setAttribute('readonly', true);
             updateSendButton();
             addUserMessage(message);
             messageInput.value = '';
             autoResize();
+
             const matched = RESPONSE_MAP.get(message.toLowerCase().trim());
-            trackEvent({ type: 'chat_submit', topic: matched ? matched.topic : null, userMessage: message, isTriggerQuestion: !!matched });
             const content = createAssistantShell();
-            if (matched) { await handleTriggerQuestion(content, matched); }
-            else         { await handleOtherMessage(content, message); }
+
+            if (matched) {
+                // It's a trigger question — log submit and handle scripted response
+                trackEvent({ type: 'chat_submit', topic: matched.topic, userMessage: message, isTriggerQuestion: true });
+                await handleTriggerQuestion(content, matched);
+            } else if (!hasGreeted) {
+                // First non-matching message → treat as greeting, no logging
+                hasGreeted = true;
+                await handleGreeting(content);
+            } else {
+                // Second+ non-matching message → redirect, no logging
+                await handleOtherMessage(content);
+            }
+
             isProcessing = false;
             updateSendButton();
         }
@@ -572,6 +611,7 @@
         messageInput.addEventListener('input', () => { updateSendButton(); autoResize(); });
         messageInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!sendBtn.disabled) sendMessage(); } });
         sendBtn.addEventListener('click', sendMessage);
+
         document.querySelector('.new-chat-btn').addEventListener('click', () => {
             chatContainer.innerHTML = '';
             const ws = document.createElement('div');
@@ -579,7 +619,9 @@
             ws.innerHTML = '<h1 class="welcome-title">What can I help with?</h1>';
             chatContainer.appendChild(ws);
         });
+
         updateSendButton();
+
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
