@@ -523,27 +523,6 @@
                 userMessage: responseObj.question,
                 responseType: 'scripted'
             });
-
-            // FIX: removed CONDITION guard — baseline 0-rows always fire,
-            // but only when the corresponding click flag is still false,
-            // guaranteeing exactly one row (either the 1 from the click handler,
-            // or the 0 from here, never both).
-            await delay(500);
-            if (!hasClickedSource) {
-                trackEvent({
-                    type:        'source_click',
-                    topic:       responseObj.topic,
-                    clicked:     0,
-                    sourceLabel: ''
-                });
-            }
-            if (!hasClickedShare) {
-                trackEvent({
-                    type:    'share_click',
-                    topic:   responseObj.topic,
-                    clicked: 0
-                });
-            }
         }
 
         async function showTypingThenRespond(messageContent, responseText) {
@@ -614,6 +593,20 @@
         });
 
         updateSendButton();
+
+        // Send baseline 0-rows only when the participant leaves the page.
+        // By this point any clicks will have already set their flags, so
+        // there is zero race condition: exactly one row per sheet, always.
+        window.addEventListener('beforeunload', () => {
+            if (!hasReceivedScriptedResponse) return;
+            const topic = scriptedTopic;
+            if (!hasClickedSource) {
+                trackEvent({ type: 'source_click', topic, clicked: 0, sourceLabel: '' });
+            }
+            if (!hasClickedShare) {
+                trackEvent({ type: 'share_click', topic, clicked: 0 });
+            }
+        });
 
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('collapsed');
