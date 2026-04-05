@@ -526,7 +526,6 @@
             window.scriptedTopic = responseObj.topic;
             lockInput();
 
-            // *** tell parent window the chatbot is done and what topic it was ***
             try {
                 window.parent.chatbotDone  = true;
                 window.parent.chatbotTopic = responseObj.topic;
@@ -614,17 +613,15 @@
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
 
+        // Listen for page_exit signal from Qualtrics and fire page_exit tracking event.
+        // Apps Script only fills 0 rows for sessions that have this event, so it
+        // will never add a 0 row while the participant is still on the page.
         window.addEventListener('message', function(event) {
-        if (event.data === 'chatbot_submit') {
-            if (!window.hasClickedSource) {
-                trackEvent({ type: 'source_click', topic: window.scriptedTopic, clicked: 0 });
+            if (event.data === 'chatbot_submit') {
+                trackEvent({ type: 'page_exit', topic: window.scriptedTopic });
             }
-            if (!window.hasClickedShare) {
-                trackEvent({ type: 'share_click', topic: window.scriptedTopic, clicked: 0 });
-            }
-        }
-    });
-        
+        });
+
     </script>
 </body>
 </html>
