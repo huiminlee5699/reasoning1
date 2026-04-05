@@ -523,7 +523,15 @@
             hasReceivedScriptedResponse = true;
             scriptedTopic = responseObj.topic;
             lockInput();
-
+            
+            // Fire a 0-row for any button that was never clicked
+            if (!hasClickedSource) {
+                trackEvent({ type: 'source_click', topic: responseObj.topic, clicked: 0 });
+            }
+            if (!hasClickedShare) {
+                trackEvent({ type: 'share_click', topic: responseObj.topic, clicked: 0 });
+            }
+            
             // *** tell parent window the chatbot is done and what topic it was ***
             try {
                 window.parent.chatbotDone  = true;
