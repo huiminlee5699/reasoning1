@@ -614,6 +614,17 @@
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
 
+        window.addEventListener('message', function(event) {
+        if (event.data === 'chatbot_submit') {
+            if (!window.hasClickedSource) {
+                trackEvent({ type: 'source_click', topic: window.scriptedTopic, clicked: 0 });
+            }
+            if (!window.hasClickedShare) {
+                trackEvent({ type: 'share_click', topic: window.scriptedTopic, clicked: 0 });
+            }
+        }
+    });
+        
     </script>
 </body>
 </html>
