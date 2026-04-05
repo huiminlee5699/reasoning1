@@ -57,8 +57,6 @@
         .modal-message { font-size: 15px; color: #374151; line-height: 1.6; text-align: center; }
         .modal-close-btn { background-color: #10a37f; color: white; border: none; border-radius: 8px; padding: 10px 32px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.2s; }
         .modal-close-btn:hover { background-color: #0d8f6f; }
-
-        /* Sidebar collapse */
         .sidebar { transition: width 0.25s ease; overflow: hidden; }
         .sidebar.collapsed { width: 60px; }
         .sidebar.collapsed .sidebar-label { display: none; }
@@ -251,12 +249,20 @@
         const RESPONSE_MAP = new Map(SCRIPTED_RESPONSES.map(r => [r.question.toLowerCase().trim(), r]));
 
         let isProcessing = false;
-
         let hasReceivedScriptedResponse = false;
         let hasGreeted = false;
         let hasClickedSource = false;
         let hasClickedShare = false;
         let scriptedTopic = null;
+
+        // *** OPTION 1: initialise flags on the parent window ***
+        // Qualtrics JS will read these when the Next button is clicked.
+        try {
+            window.parent.chatbotDone          = false;
+            window.parent.chatbotSourceClicked = false;
+            window.parent.chatbotShareClicked  = false;
+            window.parent.chatbotTopic         = null;
+        } catch(e) {}
 
         const messageInput  = document.getElementById('messageInput');
         const sendBtn       = document.getElementById('sendBtn');
@@ -460,6 +466,8 @@
                 if (!hasClickedShare) {
                     hasClickedShare = true;
                     trackEvent({ type: 'share_click', topic, clicked: 1 });
+                    // *** update parent window flag ***
+                    try { window.parent.chatbotShareClicked = true; } catch(e) {}
                 }
                 showModal('This function is not available at this time.');
             });
@@ -503,6 +511,8 @@
                     clicked:     1,
                     sourceLabel: sourceName
                 });
+                // *** update parent window flag ***
+                try { window.parent.chatbotSourceClicked = true; } catch(e) {}
                 showModal('This function is not available at this time.');
             };
 
@@ -513,6 +523,12 @@
             hasReceivedScriptedResponse = true;
             scriptedTopic = responseObj.topic;
             lockInput();
+
+            // *** tell parent window the chatbot is done and what topic it was ***
+            try {
+                window.parent.chatbotDone  = true;
+                window.parent.chatbotTopic = responseObj.topic;
+            } catch(e) {}
 
             await delay(200);
             trackEvent({
@@ -591,22 +607,6 @@
         });
 
         updateSendButton();
-
-        // *** FIX: use visibilitychange instead of beforeunload ***
-        // beforeunload fires too early inside Qualtrics iframes.
-        // visibilitychange fires reliably when the participant moves
-        // to the next Qualtrics page, which is the correct moment.
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState !== 'hidden') return;
-            if (!hasReceivedScriptedResponse) return;
-            const topic = scriptedTopic;
-            if (!hasClickedSource) {
-                trackEvent({ type: 'source_click', topic, clicked: 0, sourceLabel: '' });
-            }
-            if (!hasClickedShare) {
-                trackEvent({ type: 'share_click', topic, clicked: 0 });
-            }
-        });
 
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('collapsed');
