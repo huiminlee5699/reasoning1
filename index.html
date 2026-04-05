@@ -249,14 +249,15 @@
         const RESPONSE_MAP = new Map(SCRIPTED_RESPONSES.map(r => [r.question.toLowerCase().trim(), r]));
 
         let isProcessing = false;
-        let hasReceivedScriptedResponse = false;
-        let hasGreeted = false;
-        let hasClickedSource = false;
-        let hasClickedShare = false;
-        let scriptedTopic = null;
+        let hasGreeted   = false;
 
-        // *** OPTION 1: initialise flags on the parent window ***
-        // Qualtrics JS will read these when the Next button is clicked.
+        // Put cross-frame state on window so Qualtrics can read it
+        window.hasReceivedScriptedResponse = false;
+        window.hasClickedSource            = false;
+        window.hasClickedShare             = false;
+        window.scriptedTopic               = null;
+
+        // Initialise flags on the parent window for Qualtrics to read
         try {
             window.parent.chatbotDone          = false;
             window.parent.chatbotSourceClicked = false;
@@ -463,10 +464,9 @@
             shareBtn.className = 'icon-btn';
             shareBtn.innerHTML = SHARE_SVG + '<span class="tooltip">Share response</span>';
             shareBtn.addEventListener('click', () => {
-                if (!hasClickedShare) {
-                    hasClickedShare = true;
+                if (!window.hasClickedShare) {
+                    window.hasClickedShare = true;
                     trackEvent({ type: 'share_click', topic, clicked: 1 });
-                    // *** update parent window flag ***
                     try { window.parent.chatbotShareClicked = true; } catch(e) {}
                 }
                 showModal('This function is not available at this time.');
@@ -503,15 +503,17 @@
             messageContent.appendChild(actionRow);
 
             const onSourceClick = (sourceName) => {
-                if (hasClickedSource) { showModal('This function is not available at this time.'); return; }
-                hasClickedSource = true;
+                if (window.hasClickedSource) {
+                    showModal('This function is not available at this time.');
+                    return;
+                }
+                window.hasClickedSource = true;
                 trackEvent({
                     type:        'source_click',
                     topic:       responseObj.topic,
                     clicked:     1,
                     sourceLabel: sourceName
                 });
-                // *** update parent window flag ***
                 try { window.parent.chatbotSourceClicked = true; } catch(e) {}
                 showModal('This function is not available at this time.');
             };
@@ -520,8 +522,8 @@
             actionRow.style.visibility = 'visible';
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            hasReceivedScriptedResponse = true;
-            scriptedTopic = responseObj.topic;
+            window.hasReceivedScriptedResponse = true;
+            window.scriptedTopic = responseObj.topic;
             lockInput();
 
             // *** tell parent window the chatbot is done and what topic it was ***
@@ -611,7 +613,7 @@
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
-        
+
     </script>
 </body>
 </html>
