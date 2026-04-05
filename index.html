@@ -523,6 +523,8 @@
                 userMessage: responseObj.question,
                 responseType: 'scripted'
             });
+            
+            setTimeout(() => logBaselineZeros(responseObj.topic), 30000);
         }
 
         async function showTypingThenRespond(messageContent, responseText) {
@@ -597,16 +599,14 @@
         // Send baseline 0-rows only when the participant leaves the page.
         // By this point any clicks will have already set their flags, so
         // there is zero race condition: exactly one row per sheet, always.
-        window.addEventListener('beforeunload', () => {
-            if (!hasReceivedScriptedResponse) return;
-            const topic = scriptedTopic;
+        function logBaselineZeros(topic) {
             if (!hasClickedSource) {
                 trackEvent({ type: 'source_click', topic, clicked: 0, sourceLabel: '' });
             }
             if (!hasClickedShare) {
                 trackEvent({ type: 'share_click', topic, clicked: 0 });
             }
-        });
+        }
 
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('collapsed');
