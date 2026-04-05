@@ -523,15 +523,7 @@
             hasReceivedScriptedResponse = true;
             scriptedTopic = responseObj.topic;
             lockInput();
-            
-            // Fire a 0-row for any button that was never clicked
-            if (!hasClickedSource) {
-                trackEvent({ type: 'source_click', topic: responseObj.topic, clicked: 0 });
-            }
-            if (!hasClickedShare) {
-                trackEvent({ type: 'share_click', topic: responseObj.topic, clicked: 0 });
-            }
-            
+
             // *** tell parent window the chatbot is done and what topic it was ***
             try {
                 window.parent.chatbotDone  = true;
@@ -618,6 +610,19 @@
 
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('collapsed');
+        });
+
+        // Fire 0-rows for any button never clicked, but only once the scripted
+        // response has been shown. By this point any click flags are final.
+        window.addEventListener('beforeunload', () => {
+            if (hasReceivedScriptedResponse) {
+                if (!hasClickedSource) {
+                    trackEvent({ type: 'source_click', topic: scriptedTopic, clicked: 0 });
+                }
+                if (!hasClickedShare) {
+                    trackEvent({ type: 'share_click', topic: scriptedTopic, clicked: 0 });
+                }
+            }
         });
 
     </script>
