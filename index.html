@@ -79,7 +79,6 @@
         </div>
     </div>
 
-    <!-- FIX 1: sidebar starts with 'collapsed' class -->
     <div class="sidebar collapsed">
         <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">&#9776;</button>
         <button class="new-chat-btn"><span>+</span> <span class="new-chat-label">New chat</span></button>
@@ -253,11 +252,6 @@
 
         let isProcessing = false;
 
-        // --- Conversation state ---
-        // hasReceivedScriptedResponse: true once a scripted answer has finished streaming
-        // hasGreeted: true once the first non-matching message has been handled as a greeting
-        // hasClickedSource: true once a source bubble has been clicked
-        // scriptedTopic: the topic of the scripted response received
         let hasReceivedScriptedResponse = false;
         let hasGreeted = false;
         let hasClickedSource = false;
@@ -277,7 +271,6 @@
         modalCloseBtn.addEventListener('click', e => { e.stopPropagation(); closeModal(); });
         modalOverlay.addEventListener('click', e => { e.stopPropagation(); if (e.target === modalOverlay) closeModal(); });
 
-        // Lock the input bar permanently after scripted response is received
         function lockInput() {
             messageInput.disabled = true;
             messageInput.placeholder = '';
@@ -464,11 +457,10 @@
             shareBtn.className = 'icon-btn';
             shareBtn.innerHTML = SHARE_SVG + '<span class="tooltip">Share response</span>';
             shareBtn.addEventListener('click', () => {
-                if (!hasClickedShare && CONDITION === 'sourcelink') {
+                // FIX: always log the 1-row on first click, regardless of condition
+                if (!hasClickedShare) {
                     hasClickedShare = true;
                     trackEvent({ type: 'share_click', topic, clicked: 1 });
-                } else if (!hasClickedShare) {
-                    hasClickedShare = true;
                 }
                 showModal('This function is not available at this time.');
             });
@@ -503,8 +495,8 @@
             actionRow.style.visibility = 'hidden';
             messageContent.appendChild(actionRow);
 
+            // FIX: always log the 1-row on first click, regardless of condition
             const onSourceClick = (sourceName) => {
-                // Guard: only log once ever, using a module-level flag
                 if (hasClickedSource) { showModal('This function is not available at this time.'); return; }
                 hasClickedSource = true;
                 trackEvent({
@@ -520,7 +512,6 @@
             actionRow.style.visibility = 'visible';
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            // Mark scripted response as received and store topic, then lock input
             hasReceivedScriptedResponse = true;
             scriptedTopic = responseObj.topic;
             lockInput();
@@ -533,29 +524,28 @@
                 responseType: 'scripted'
             });
 
-            // Log 0 baselines after a delay so any click that happened right as
-            // streaming ended has time to set the flags before we check them.
+            // FIX: removed CONDITION guard — baseline 0-rows always fire,
+            // but only when the corresponding click flag is still false,
+            // guaranteeing exactly one row (either the 1 from the click handler,
+            // or the 0 from here, never both).
             await delay(500);
-            if (CONDITION === 'sourcelink') {
-                if (!hasClickedSource) {
-                    trackEvent({
-                        type:        'source_click',
-                        topic:       responseObj.topic,
-                        clicked:     0,
-                        sourceLabel: ''
-                    });
-                }
-                if (!hasClickedShare) {
-                    trackEvent({
-                        type:    'share_click',
-                        topic:   responseObj.topic,
-                        clicked: 0
-                    });
-                }
+            if (!hasClickedSource) {
+                trackEvent({
+                    type:        'source_click',
+                    topic:       responseObj.topic,
+                    clicked:     0,
+                    sourceLabel: ''
+                });
+            }
+            if (!hasClickedShare) {
+                trackEvent({
+                    type:    'share_click',
+                    topic:   responseObj.topic,
+                    clicked: 0
+                });
             }
         }
 
-        // Simple typing indicator for short non-scripted responses
         async function showTypingThenRespond(messageContent, responseText) {
             const dots = document.createElement('div');
             dots.className = 'typing-indicator';
@@ -573,17 +563,13 @@
 
         async function handleGreeting(messageContent, userMessage) {
             await showTypingThenRespond(messageContent, 'Hi, how may I help you today?');
-            // Log greeting exchange
             trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'greeting' });
         }
 
         async function handleOtherMessage(messageContent, userMessage) {
             await showTypingThenRespond(messageContent, 'Please type in your assigned prompt.');
-            // Log redirect exchange
             trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'redirect' });
         }
-
-
 
         async function sendMessage() {
             if (isProcessing || messageInput.disabled) return;
@@ -600,16 +586,13 @@
             const content = createAssistantShell();
 
             if (matched) {
-                // It's a trigger question — log submit and handle scripted response
                 trackEvent({ type: 'chat_submit', topic: matched.topic, userMessage: message, isTriggerQuestion: true });
                 await handleTriggerQuestion(content, matched);
             } else if (!hasGreeted) {
-                // First non-matching message → treat as greeting, log it
                 hasGreeted = true;
                 trackEvent({ type: 'chat_submit', topic: null, userMessage: message, isTriggerQuestion: false });
                 await handleGreeting(content, message);
             } else {
-                // Second+ non-matching message → redirect, log it
                 trackEvent({ type: 'chat_submit', topic: null, userMessage: message, isTriggerQuestion: false });
                 await handleOtherMessage(content, message);
             }
