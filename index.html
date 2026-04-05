@@ -457,7 +457,6 @@
             shareBtn.className = 'icon-btn';
             shareBtn.innerHTML = SHARE_SVG + '<span class="tooltip">Share response</span>';
             shareBtn.addEventListener('click', () => {
-                // FIX: always log the 1-row on first click, regardless of condition
                 if (!hasClickedShare) {
                     hasClickedShare = true;
                     trackEvent({ type: 'share_click', topic, clicked: 1 });
@@ -495,7 +494,6 @@
             actionRow.style.visibility = 'hidden';
             messageContent.appendChild(actionRow);
 
-            // FIX: always log the 1-row on first click, regardless of condition
             const onSourceClick = (sourceName) => {
                 if (hasClickedSource) { showModal('This function is not available at this time.'); return; }
                 hasClickedSource = true;
@@ -523,8 +521,6 @@
                 userMessage: responseObj.question,
                 responseType: 'scripted'
             });
-            
-            setTimeout(() => logBaselineZeros(responseObj.topic), 30000);
         }
 
         async function showTypingThenRespond(messageContent, responseText) {
@@ -596,17 +592,21 @@
 
         updateSendButton();
 
-        // Send baseline 0-rows only when the participant leaves the page.
-        // By this point any clicks will have already set their flags, so
-        // there is zero race condition: exactly one row per sheet, always.
-        function logBaselineZeros(topic) {
+        // *** FIX: use visibilitychange instead of beforeunload ***
+        // beforeunload fires too early inside Qualtrics iframes.
+        // visibilitychange fires reliably when the participant moves
+        // to the next Qualtrics page, which is the correct moment.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'hidden') return;
+            if (!hasReceivedScriptedResponse) return;
+            const topic = scriptedTopic;
             if (!hasClickedSource) {
                 trackEvent({ type: 'source_click', topic, clicked: 0, sourceLabel: '' });
             }
             if (!hasClickedShare) {
                 trackEvent({ type: 'share_click', topic, clicked: 0 });
             }
-        }
+        });
 
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('collapsed');
