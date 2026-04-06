@@ -255,7 +255,6 @@
         window.hasClickedSource            = false;
         window.hasClickedShare             = false;
         window.scriptedTopic               = null;
-        // ── NEW: store the label of whichever source bubble was clicked ──
         window.clickedSourceLabel          = '';
 
         try {
@@ -466,7 +465,6 @@
             shareBtn.addEventListener('click', () => {
                 if (!window.hasClickedShare) {
                     window.hasClickedShare = true;
-                    trackEvent({ type: 'share_click', topic, clicked: 1 });
                     try { window.parent.chatbotShareClicked = true; } catch(e) {}
                 }
                 showModal('This function is not available at this time.');
@@ -508,14 +506,7 @@
                     return;
                 }
                 window.hasClickedSource   = true;
-                // ── NEW: store the label for the acted_summary event ──
                 window.clickedSourceLabel = sourceName;
-                trackEvent({
-                    type:        'source_click',
-                    topic:       responseObj.topic,
-                    clicked:     1,
-                    sourceLabel: sourceName
-                });
                 try { window.parent.chatbotSourceClicked = true; } catch(e) {}
                 showModal('This function is not available at this time.');
             };
@@ -615,9 +606,9 @@
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
 
-        // On page exit, fire a single acted_summary event with final 0/1 values
-        // for all tracked buttons, plus the source label if one was clicked.
+        // On page exit, fire a single acted_summary event with final 0/1 values.
         // verify_clicked is always 0 in this condition (source-link only).
+        // No separate click tracking events are sent — everything is in acted_summary.
         window.addEventListener('message', function(event) {
             if (event.data === 'chatbot_submit') {
                 trackEvent({
