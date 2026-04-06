@@ -250,13 +250,14 @@
         let isProcessing = false;
         let hasGreeted   = false;
 
-        // Put cross-frame state on window so it persists for the page_exit summary
+        // Cross-frame state on window
         window.hasReceivedScriptedResponse = false;
         window.hasClickedSource            = false;
         window.hasClickedShare             = false;
         window.scriptedTopic               = null;
+        // ── NEW: store the label of whichever source bubble was clicked ──
+        window.clickedSourceLabel          = '';
 
-        // Initialise flags on the parent window for Qualtrics to read
         try {
             window.parent.chatbotDone          = false;
             window.parent.chatbotSourceClicked = false;
@@ -506,7 +507,9 @@
                     showModal('This function is not available at this time.');
                     return;
                 }
-                window.hasClickedSource = true;
+                window.hasClickedSource   = true;
+                // ── NEW: store the label for the acted_summary event ──
+                window.clickedSourceLabel = sourceName;
                 trackEvent({
                     type:        'source_click',
                     topic:       responseObj.topic,
@@ -612,16 +615,17 @@
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
 
-        // When Qualtrics sends 'chatbot_submit' via postMessage, fire a single
-        // acted_summary event capturing the final 0/1 state of both buttons.
-        // This is the cleanest approach — one row per participant, guaranteed
-        // accurate at the exact moment they click Next.
+        // On page exit, fire a single acted_summary event with final 0/1 values
+        // for all tracked buttons, plus the source label if one was clicked.
+        // verify_clicked is always 0 in this condition (source-link only).
         window.addEventListener('message', function(event) {
             if (event.data === 'chatbot_submit') {
                 trackEvent({
                     type:          'acted_summary',
                     topic:         window.scriptedTopic,
                     sourceClicked: window.hasClickedSource ? 1 : 0,
+                    sourceLabel:   window.clickedSourceLabel || '',
+                    verifyClicked: 0,
                     shareClicked:  window.hasClickedShare  ? 1 : 0
                 });
             }
