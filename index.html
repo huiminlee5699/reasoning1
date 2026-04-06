@@ -40,7 +40,6 @@
         .icon-btn svg { width: 22px; height: 22px; display: block; }
         .icon-btn .tooltip { display: none; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: #374151; color: white; font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; }
         .icon-btn:hover .tooltip { display: block; }
-        .prompt-reminder { color: #6b7280; font-size: 14px; font-style: italic; padding: 4px 0; }
         .input-container { position: sticky; bottom: 0; background-color: #f7f7f8; padding: 20px; max-width: 768px; width: 100%; margin: 0 auto; }
         .input-wrapper { position: relative; background-color: white; border-radius: 24px; border: 1px solid #d1d5db; display: flex; align-items: flex-end; padding: 12px; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); min-height: 56px; }
         .input-wrapper.locked { background-color: #f3f4f6; border-color: #e5e7eb; box-shadow: none; }
@@ -251,7 +250,7 @@
         let isProcessing = false;
         let hasGreeted   = false;
 
-        // Put cross-frame state on window so Qualtrics can read it
+        // Put cross-frame state on window so it persists for the page_exit summary
         window.hasReceivedScriptedResponse = false;
         window.hasClickedSource            = false;
         window.hasClickedShare             = false;
@@ -613,12 +612,18 @@
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
 
-        // Listen for page_exit signal from Qualtrics and fire page_exit tracking event.
-        // Apps Script only fills 0 rows for sessions that have this event, so it
-        // will never add a 0 row while the participant is still on the page.
+        // When Qualtrics sends 'chatbot_submit' via postMessage, fire a single
+        // acted_summary event capturing the final 0/1 state of both buttons.
+        // This is the cleanest approach — one row per participant, guaranteed
+        // accurate at the exact moment they click Next.
         window.addEventListener('message', function(event) {
             if (event.data === 'chatbot_submit') {
-                trackEvent({ type: 'page_exit', topic: window.scriptedTopic });
+                trackEvent({
+                    type:          'acted_summary',
+                    topic:         window.scriptedTopic,
+                    sourceClicked: window.hasClickedSource ? 1 : 0,
+                    shareClicked:  window.hasClickedShare  ? 1 : 0
+                });
             }
         });
 
