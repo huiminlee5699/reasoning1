@@ -92,11 +92,15 @@
         .reason-body { border-left: 2px solid #e5e7eb; padding: 4px 0 4px 16px; margin-top: 10px; color: #6b7280; font-size: 14.5px; line-height: 1.75; }
         .reason-body p { margin: 0 0 12px; }
         .reason-body p:last-child { margin-bottom: 0; }
-        .reason-searched { font-weight: 500; color: #6b7280; }
-        .reason-sources { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
-        .src-link { display: inline-flex; align-items: center; gap: 8px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 12px; font-size: 13px; color: #374151; cursor: pointer; transition: background-color .2s, border-color .2s; max-width: 100%; }
+        /* nested "Searched 4 websites" disclosure inside the expanded panel */
+        .searched-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 2px 0; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 500; color: #6b7280; }
+        .searched-toggle:hover { color: #374151; }
+        .reason-sources { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+        .src-link { display: inline-flex; align-items: center; gap: 6px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 10px; padding: 6px 12px; font-size: 13px; color: #374151; cursor: pointer; transition: background-color .2s, border-color .2s; max-width: 100%; white-space: nowrap; }
         .src-link:hover { background-color: #e5e7eb; border-color: #d1d5db; }
-        .src-link .st { color: #9ca3af; font-size: 12px; display: block; }
+        /* inline citation chip inside the answer body */
+        .cite-chip { display: inline-flex; align-items: center; gap: 5px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 20px; padding: 1px 9px; font-size: 11.5px; color: #6b7280; margin-left: 6px; vertical-align: baseline; cursor: pointer; white-space: nowrap; transition: background-color .2s, border-color .2s; }
+        .cite-chip:hover { background-color: #e5e7eb; border-color: #d1d5db; color: #374151; }
     </style>
 </head>
 <body>
@@ -289,7 +293,20 @@
         }
         const COND = parseCondition(CONDITION);
         const IS_CONTROL = COND.credibility === 'control';
+        /* Sources shown in the REASONING (generation chips + expanded panel).
+           Controls show no reasoning at all, so this is empty for them. */
         const CONDITION_SOURCES = IS_CONTROL ? [] : SOURCE_SETS[COND.credibility];
+        /* Sources cited INSIDE THE ANSWER. Controls get these too, so the answer
+           body is structurally identical in all 11 cells and IV2 isolates the
+           reasoning display rather than also removing in-answer citations.
+           Which set the controls cite defaults to credible; override with
+           &ctrlsrc=credible|mixed|noncredible if you want to match a different
+           reference cell. */
+        const CTRL_SRC = urlParams.get('ctrlsrc') || 'credible';
+        const ANSWER_SOURCES = IS_CONTROL
+            ? (SOURCE_SETS[CTRL_SRC] || SOURCE_SETS.credible)
+            : CONDITION_SOURCES;
+        const ANSWER_SRC_IS_MIXED = IS_CONTROL ? (CTRL_SRC === 'mixed') : (COND.credibility === 'mixed');
         /* ==================== SCRIPTED RESPONSE =========================
            No source bubbles appear in the answer. Sources live only in the
            reasoning, so IV1 moves one thing and source clicks measure
@@ -338,6 +355,12 @@
         window.expandedDuringGeneration    = null; // 1 = opened before the answer finished
         window.shownSourceOrder            = '';
         window.credPattern                 = '';   // e.g. "1010" for a mixed row
+        window.answerSourceOrder           = '';   // sources cited inside the answer
+        window.citePositions               = '';   // e.g. "p1s0|p2s1|p3s0|p4s2"
+        window.answerSourceClicks          = 0;
+        window.reasoningSourceClicks       = 0;
+        window.hasExpandedSearched         = false;
+        window.firstSearchedExpandMs       = null;
         window.answerDoneMs                = null;
         try {
             window.parent.chatbotDone          = false;
@@ -440,7 +463,51 @@
                 }
             }
         }
-        async function streamFormattedAnswer(container, text) {
+        /* ================= IN-ANSWER CITATION PLACEMENT =================
+           One chip per source, dropped at a randomly chosen sentence boundary.
+           Eligible blocks exclude the opening verdict line (which is the answer's
+           first sentence) and the closing "Bottom line:" block. Both task answers
+           have exactly four body paragraphs between those two, so with four
+           sources each paragraph receives exactly one chip - the density is
+           identical across tasks and cells, only the position moves. */
+        function isVerdictBlock(block) { return /^\*\*[^*]+\*\*$/.test(block.trim()); }
+        function isBottomLineBlock(block) { return /^\*\*Bottom line/i.test(block.trim()); }
+        function splitSentences(s) {
+            const parts = s.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g);
+            return parts ? parts.map(p => p.replace(/\s+$/, '')).filter(Boolean) : [s];
+        }
+        function planCitations(text, sources) {
+            const blocks = text.split(/\n\n+/);
+            const eligible = [];
+            blocks.forEach((b, i) => {
+                const t = b.trim();
+                if (!t || isVerdictBlock(t) || isBottomLineBlock(t)) return;
+                if (t.split('\n').every(l => /^[-*]\s/.test(l.trim()) || l.trim() === '')) return; // skip lists
+                eligible.push(i);
+            });
+            const plan = {};
+            if (!sources || !sources.length || !eligible.length) return plan;
+            /* Spread chips over distinct paragraphs; if there are more sources
+               than paragraphs, wrap around so none is dropped. */
+            const order = shuffle(eligible);
+            sources.forEach((s, k) => {
+                const blockIdx = order[k % order.length];
+                const sents = splitSentences(blocks[blockIdx].trim().split('\n').join(' '));
+                const at = Math.floor(Math.random() * sents.length);   // any sentence end, incl. paragraph end
+                if (!plan[blockIdx]) plan[blockIdx] = [];
+                plan[blockIdx].push({ source: s, afterSentence: at });
+            });
+            return plan;
+        }
+        function makeCiteChip(s) {
+            const chip = document.createElement('span');
+            chip.className = 'cite-chip';
+            chip.innerHTML = '&#128279; ' + s.name;
+            chip.addEventListener('click', () => onSourceClick(s.name, 0, s.cred, 'answer'));
+            return chip;
+        }
+        async function streamFormattedAnswer(container, text, citePlan) {
+            citePlan = citePlan || {};
             const blocks = text.split(/\n\n+/);
             for (let b = 0; b < blocks.length; b++) {
                 const block = blocks[b].trim();
@@ -477,7 +544,21 @@
                     const p = document.createElement('p');
                     p.style.cssText = 'margin-bottom: 10px; line-height: 1.7;';
                     container.appendChild(p);
-                    await streamMarkdownTextInto(p, lines.join(' '));
+                    const cites = citePlan[b];
+                    if (!cites || !cites.length) {
+                        await streamMarkdownTextInto(p, lines.join(' '));
+                    } else {
+                        /* Stream sentence by sentence so a chip can be dropped in
+                           at the planned boundary as the text arrives, rather than
+                           appearing after the paragraph finishes. */
+                        const sents = splitSentences(lines.join(' '));
+                        for (let si = 0; si < sents.length; si++) {
+                            await streamMarkdownTextInto(p, (si ? ' ' : '') + sents[si]);
+                            cites.filter(c => c.afterSentence === si)
+                                 .forEach(c => p.appendChild(makeCiteChip(c.source)));
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                        }
+                    }
                 }
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
@@ -563,25 +644,36 @@
             addStep('<span>' + TASK.preamble + '</span>');
             trackEvent({ type: 'gen_step', step: 'preamble' });
             await waitUntil(T_PREAMBLE);
-            /* Step 4 - searching cue, with all four chips shown together. */
+            /* Step 4 - searching cue. Chips arrive ONE AFTER ANOTHER and then
+               stay up together for the rest of the window, so every domain is
+               on screen by the end of the search phase. Cycling them through a
+               single slot would give each roughly a second of exposure; this
+               way the last chip still gets ~2.4s and the first gets the full
+               six, which matters because the chips ARE the IV1 manipulation. */
             greyOutAbove(null);
             addStep('<span class="gen-label shimmer">&#128269; Searching the web...</span>');
             const srcRow = document.createElement('div');
-            srcRow.className = 'gen-sources';
-            shownSources.forEach(s => {
+            srcRow.className = 'gen-sources on';
+            genBlock.appendChild(srcRow);
+            const n = shownSources.length;
+            const CHIP_GAP = Math.floor((T_SEARCH - T_PREAMBLE) / (n + 1));  // 1200ms at 4 chips
+            for (let i = 0; i < n; i++) {
+                await waitUntil(T_PREAMBLE + i * CHIP_GAP);
+                const s = shownSources[i];
                 const chip = document.createElement('span');
                 chip.className = 'source-bubble';
+                chip.style.cssText = 'opacity:0;transition:opacity .26s ease;';
                 chip.innerHTML = '&#128279; ' + s.name;
                 srcRow.appendChild(chip);
-            });
-            genBlock.appendChild(srcRow);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            requestAnimationFrame(() => srcRow.classList.add('on'));
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                requestAnimationFrame(() => { chip.style.opacity = '1'; });
+                trackEvent({ type: 'source_shown', sourceLabel: s.name, sourceCred: s.cred, position: i + 1 });
+            }
             trackEvent({
                 type: 'sources_shown',
                 sourceOrder: shownSources.map(s => s.name).join('|'),
                 credPattern: shownSources.map(s => s.cred).join(''),
-                sourceCount: shownSources.length
+                sourceCount: n
             });
             await waitUntil(T_SEARCH - FADE_MS);
             srcRow.classList.remove('on');
@@ -602,12 +694,15 @@
            rather than a deeper trace. IV2 therefore manipulates continued
            ACCESS to the reasoning after the answer lands, not access to
            extra content. */
-        function onSourceClick(sourceName, position, cred) {
+        function onSourceClick(sourceName, position, cred, location) {
             window.sourceClickCount += 1;
+            if (location === 'answer') window.answerSourceClicks += 1;
+            else                       window.reasoningSourceClicks += 1;
             trackEvent({
                 type: 'source_click',
                 sourceLabel: sourceName,
                 sourceCred: cred,          // 1 = authoritative, 0 = dubious
+                location: location,        // 'answer' | 'reasoning'
                 position: position,
                 clickIndex: window.sourceClickCount,
                 repeat: window.hasClickedSource ? 1 : 0
@@ -621,29 +716,43 @@
             try { window.parent.chatbotSourceClicked = true; } catch(e) {}
             showModal('This function is not available at this time.');
         }
+        /* The expanded panel holds the preamble and a NESTED "Searched N websites"
+           disclosure. The status label ("Assessing closure impact" /
+           "Evaluating sleep concerns") appears only during generation and is not
+           reproduced here. Chips carry the domain alone - no title line. */
         function buildReasonBody(shownSources) {
             const wrap = document.createElement('div');
             wrap.className = 'reason-body';
             const p1 = document.createElement('p');
             p1.textContent = TASK.preamble;
             wrap.appendChild(p1);
-            const p2 = document.createElement('p');
-            p2.textContent = TASK.statusLabel;
-            wrap.appendChild(p2);
-            const p3 = document.createElement('p');
-            p3.className = 'reason-searched';
-            p3.textContent = 'Searched ' + shownSources.length + ' websites';
-            wrap.appendChild(p3);
+            const toggle = document.createElement('button');
+            toggle.className = 'searched-toggle';
+            toggle.innerHTML = '<span class="chev">&#9656;</span> Searched ' + shownSources.length + ' websites';
+            wrap.appendChild(toggle);
             const list = document.createElement('div');
-            list.className = 'reason-sources';
+            list.className = 'reason-sources hidden';
             shownSources.forEach((s, idx) => {
                 const a = document.createElement('div');
                 a.className = 'src-link';
-                a.innerHTML = '&#128279; <span><span>' + s.name + '</span><span class="st">' + s.title + '</span></span>';
-                a.addEventListener('click', () => onSourceClick(s.name, idx + 1, s.cred));
+                a.innerHTML = '&#128279; <span>' + s.name + '</span>';
+                a.addEventListener('click', () => onSourceClick(s.name, idx + 1, s.cred, 'reasoning'));
                 list.appendChild(a);
             });
             wrap.appendChild(list);
+            toggle.addEventListener('click', () => {
+                const opening = list.classList.contains('hidden');
+                list.classList.toggle('hidden');
+                toggle.querySelector('.chev').classList.toggle('open', opening);
+                if (opening && !window.hasExpandedSearched) {
+                    window.hasExpandedSearched = true;
+                    window.firstSearchedExpandMs = sinceLoad();
+                }
+                trackEvent({
+                    type: opening ? 'searched_expand' : 'searched_collapse',
+                    firstSearchedExpandMs: window.firstSearchedExpandMs
+                });
+            });
             return wrap;
         }
         function registerExpand() {
@@ -731,6 +840,13 @@
             window.shownSourceOrder = shownSources.map(s => s.name).join('|');
             /* e.g. "1010" - which slots held authoritative domains, left to right */
             window.credPattern = shownSources.map(s => s.cred).join('');
+            /* In-answer citations. Controls have no reasoning chips but still cite,
+               so this set is drawn independently of shownSources. */
+            const answerSources = shuffleForDisplay(ANSWER_SOURCES, ANSWER_SRC_IS_MIXED);
+            const citePlan = planCitations(responseObj.answer, answerSources);
+            window.answerSourceOrder = answerSources.map(s => s.name).join('|');
+            window.citePositions = Object.keys(citePlan).sort((a, b) => a - b)
+                .map(k => citePlan[k].map(c => 'p' + k + 's' + c.afterSentence).join(',')).join('|');
             await runGenerationPhase(messageContent, shownSources);
             /* Reasoning display lands FIRST, then the answer streams beneath it. */
             let display = null;
@@ -744,7 +860,7 @@
             const actionRow = buildActionRow(responseObj.answer);
             actionRow.style.visibility = 'hidden';
             messageContent.appendChild(actionRow);
-            await streamFormattedAnswer(answerContainer, responseObj.answer);
+            await streamFormattedAnswer(answerContainer, responseObj.answer, citePlan);
             window.answerDoneMs = sinceLoad();
             actionRow.style.visibility = 'visible';
             chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -883,12 +999,18 @@
                     transparency:     COND.transparency,
                     sourceOrder:      window.shownSourceOrder,
                     credPattern:      window.credPattern,
+                    answerSourceOrder: window.answerSourceOrder,
+                    citePositions:    window.citePositions,
                     sourceClicked:    window.hasClickedSource ? 1 : 0,
                     sourceLabel:      window.clickedSourceLabel || '',
                     sourceClicks:     window.sourceClickCount,
+                    answerSourceClicks:    window.answerSourceClicks,
+                    reasoningSourceClicks: window.reasoningSourceClicks,
                     expanded:         window.hasExpandedReasoning ? 1 : 0,
                     firstExpandMs:    window.firstExpandMs,
                     duringGeneration: window.expandedDuringGeneration,
+                    searchedExpanded: window.hasExpandedSearched ? 1 : 0,
+                    firstSearchedExpandMs: window.firstSearchedExpandMs,
                     collapsed:        window.hasCollapsedReasoning ? 1 : 0,
                     verifyClicked:    0,
                     shareClicked:     window.hasClickedShare ? 1 : 0
