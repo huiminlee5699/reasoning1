@@ -476,26 +476,40 @@
             const parts = s.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g);
             return parts ? parts.map(p => p.replace(/\s+$/, '')).filter(Boolean) : [s];
         }
+        /* Citation slots are FIXED per task, not random. Each entry is
+           [blockIndex, sentenceIndex] and its array position is which source
+           lands there: slot 0 = Source A = the first domain shown during
+           generation, slot 1 = Source B, and so on. Block 0 is the verdict line
+           and the last block is "Bottom line:", so neither is ever a target.
+           Sentence indices are zero-based within the paragraph. */
+        const CITE_SLOTS = {
+            A: [ [1, 2],   // A - after "...simpler, lower-risk profile."
+                 [2, 2],   // B - after "...drives that part of your score."
+                 [3, 1],   // C - after "...count toward your credit age."
+                 [4, 1] ], // D - after "...a cleaner, simpler file."
+            B: [ [1, 1],   // A - after "...the falling-asleep part."
+                 [2, 0],   // B - after "...products are formulated at."
+                 [3, 2],   // C - after "...available without a prescription."
+                 [4, 1] ]  // D - after "...usually holds on its own."
+        };
         function planCitations(text, sources) {
-            const blocks = text.split(/\n\n+/);
-            const eligible = [];
-            blocks.forEach((b, i) => {
-                const t = b.trim();
-                if (!t || isVerdictBlock(t) || isBottomLineBlock(t)) return;
-                if (t.split('\n').every(l => /^[-*]\s/.test(l.trim()) || l.trim() === '')) return; // skip lists
-                eligible.push(i);
-            });
             const plan = {};
-            if (!sources || !sources.length || !eligible.length) return plan;
-            /* Spread chips over distinct paragraphs; if there are more sources
-               than paragraphs, wrap around so none is dropped. */
-            const order = shuffle(eligible);
+            if (!sources || !sources.length) return plan;
+            const slots  = CITE_SLOTS[TASK_ID] || [];
+            const blocks = text.split(/\n\n+/);
             sources.forEach((s, k) => {
-                const blockIdx = order[k % order.length];
-                const sents = splitSentences(blocks[blockIdx].trim().split('\n').join(' '));
-                const at = Math.floor(Math.random() * sents.length);   // any sentence end, incl. paragraph end
+                const slot = slots[k];
+                if (!slot) return;
+                const [blockIdx, sentIdx] = slot;
+                const t = (blocks[blockIdx] || '').trim();
+                /* Guard: if the answer text is edited later and a slot no longer
+                   resolves, drop that chip rather than render it in the wrong
+                   place or crash. Check the debug panel after any text edit. */
+                if (!t || isVerdictBlock(t) || isBottomLineBlock(t)) return;
+                const sents = splitSentences(t.split('\n').join(' '));
+                if (sentIdx >= sents.length) return;
                 if (!plan[blockIdx]) plan[blockIdx] = [];
-                plan[blockIdx].push({ source: s, afterSentence: at });
+                plan[blockIdx].push({ source: s, afterSentence: sentIdx });
             });
             return plan;
         }
@@ -644,30 +658,28 @@
             addStep('<span>' + TASK.preamble + '</span>');
             trackEvent({ type: 'gen_step', step: 'preamble' });
             await waitUntil(T_PREAMBLE);
-            /* Step 4 - searching cue. Chips arrive ONE AFTER ANOTHER and then
-               stay up together for the rest of the window, so every domain is
-               on screen by the end of the search phase. Cycling them through a
-               single slot would give each roughly a second of exposure; this
-               way the last chip still gets ~2.4s and the first gets the full
-               six, which matters because the chips ARE the IV1 manipulation. */
+            /* Step 4 - searching cue. Sources CYCLE through one shared slot:
+               each fades in, holds, and fades out before the next arrives, so
+               only ever one chip is on screen. Each owns an equal window
+               [T_PREAMBLE + i*gap, T_PREAMBLE + (i+1)*gap), which keeps exposure
+               time identical across chips and across cells. */
             greyOutAbove(null);
             addStep('<span class="gen-label shimmer">&#128269; Searching the web...</span>');
-            const srcRow = document.createElement('div');
-            srcRow.className = 'gen-sources on';
-            genBlock.appendChild(srcRow);
+            const slot = document.createElement('div');
+            slot.className = 'gen-sources';
+            genBlock.appendChild(slot);
+            greyOutAbove(slot);
             const n = shownSources.length;
-            const CHIP_GAP = Math.floor((T_SEARCH - T_PREAMBLE) / (n + 1));  // 1200ms at 4 chips
+            const CHIP_GAP = Math.floor((T_SEARCH - T_PREAMBLE) / n);   // 1500ms at 4 chips
             for (let i = 0; i < n; i++) {
-                await waitUntil(T_PREAMBLE + i * CHIP_GAP);
                 const s = shownSources[i];
-                const chip = document.createElement('span');
-                chip.className = 'source-bubble';
-                chip.style.cssText = 'opacity:0;transition:opacity .26s ease;';
-                chip.innerHTML = '&#128279; ' + s.name;
-                srcRow.appendChild(chip);
+                await waitUntil(T_PREAMBLE + i * CHIP_GAP);
+                slot.innerHTML = '<span class="source-bubble">&#128279; ' + s.name + '</span>';
+                slot.classList.add('on');
                 chatContainer.scrollTop = chatContainer.scrollHeight;
-                requestAnimationFrame(() => { chip.style.opacity = '1'; });
                 trackEvent({ type: 'source_shown', sourceLabel: s.name, sourceCred: s.cred, position: i + 1 });
+                await waitUntil(T_PREAMBLE + (i + 1) * CHIP_GAP - FADE_MS);
+                slot.classList.remove('on');
             }
             trackEvent({
                 type: 'sources_shown',
@@ -675,11 +687,9 @@
                 credPattern: shownSources.map(s => s.cred).join(''),
                 sourceCount: n
             });
-            await waitUntil(T_SEARCH - FADE_MS);
-            srcRow.classList.remove('on');
             await waitUntil(T_SEARCH);
+            slot.remove();
             /* Step 5 - task-specific status label. */
-            srcRow.remove();
             greyOutAbove(null);
             addStep('<span class="gen-label shimmer">' + TASK.statusLabel + '</span>');
             trackEvent({ type: 'gen_step', step: 'status_label' });
@@ -970,6 +980,18 @@
                 + '\ntotalGenerationMs=' + TOTAL_MS
                 + '\nphases: dots@0 thinking@' + T_DOTS + ' preamble@' + T_THINKING
                 + ' search@' + T_PREAMBLE + ' status@' + T_SEARCH + ' end@' + TOTAL_MS
+                + '\nctrlsrc=' + (IS_CONTROL ? CTRL_SRC : 'n/a')
+                + '\ncitation slots (A,B,C,D):'
+                + (function () {
+                    const blocks = TASK.answer.split(/\n\n+/);
+                    return (CITE_SLOTS[TASK_ID] || []).map(function (sl, i) {
+                        const t = (blocks[sl[0]] || '').trim().split('\n').join(' ');
+                        const sents = splitSentences(t);
+                        const s = sents[sl[1]];
+                        const tail = s ? s.trim().slice(-40) : '!! UNRESOLVED';
+                        return '\n  ' + 'ABCD'[i] + ' block' + sl[0] + ' sent' + sl[1] + ' -> "..' + tail + '"';
+                    }).join('');
+                })()
                 + '\nprompt = "' + TASK.question + '"';
             document.body.appendChild(panel);
         }
