@@ -129,8 +129,8 @@
         <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">&#9776;</button>
         <button class="new-chat-btn"><span>+</span> <span class="new-chat-label">New chat</span></button>
         <div class="sidebar-items">
-            <div class="sidebar-item" onclick="showModal('You do not have any saved chats yet.')">&#128269; <span class="sidebar-label">Search chats</span></div>
-            <div class="sidebar-item" onclick="showModal('This function is not available at this time.')">&#128218; <span class="sidebar-label">Library</span></div>
+            <div class="sidebar-item" id="sbSearchChats">&#128269; <span class="sidebar-label">Search chats</span></div>
+            <div class="sidebar-item" id="sbLibrary">&#128218; <span class="sidebar-label">Library</span></div>
         </div>
         <div style="margin-top:auto;padding-top:16px;border-top:1px solid #d1d5db;">
             <div class="sidebar-item">
@@ -185,14 +185,28 @@
            as well as across cells. The debug panel prints the live count —
            re-check it after any edit to the trace wording.
 
-           Where the steps appear, and in what state:
-             - During generation: all three stream in, each with a LIVE
-               chevron the participant can open while the answer is still
-               being produced.
-             - In the post-answer panel: all three are reproduced. Default
-               state is COLLAPSED in buried/button and OPEN in given, so the
-               'given' cell genuinely gives the trace rather than merely
-               surfacing the handle to it.
+           GENERATION runs ONE LINE AT A TIME. Each cue replaces the last
+           rather than greying and staying above it: dots -> Thinking... ->
+           preamble -> Searching the web + chips -> the trace steps. Nothing
+           lingers to be re-read.
+
+           The trace steps are where the cells diverge:
+             - GIVEN: the three steps ACCUMULATE and stay on screen through to
+               26s, earlier ones greyed. All three are visible together and all
+               three stay clickable.
+             - BURIED / BUTTON: the three steps CYCLE, one at a time, each
+               replacing the last after 3s. A participant never sees more than
+               one at once and never sees all three together during generation.
+           In every cell a step label is clickable for as long as it is on
+           screen. A step open at the moment it is replaced is logged as
+           'step_truncated' so mid-read interruptions are countable.
+
+           POST-ANSWER PANEL reproduces all three steps in every non-control
+           cell, with identical controls. Only the default state differs:
+           OPEN in given (collapsible per step, plus a panel-level Hide),
+           COLLAPSED in buried/button. So buried/button reach the trace only
+           after the answer lands, and only via two clicks — the affordance,
+           then each step.
            Set STEPS_IN_PANEL to false to keep the steps generation-only.
            ################################################################### */
         /* >>> REPLACE with the deployment URL for the AI Reasoning study <<< */
@@ -458,6 +472,7 @@
         window.panelStepClicks      = 0;
         window.firstStepExpandMs    = null;
         window.firstStepExpandWhere = '';         // 'generation' | 'reasoning'
+        window.stepsTruncated       = 0;          // open when taken off screen
         try {
             window.parent.chatbotDone          = false;
             window.parent.chatbotSourceClicked = false;
@@ -474,10 +489,22 @@
         const modalOverlay  = document.getElementById('modalOverlay');
         const modalMessage  = document.getElementById('modalMessage');
         const modalCloseBtn = document.getElementById('modalCloseBtn');
+        /* ==================== UNAVAILABLE-FUNCTION COPY ==================
+           Register: "preview build". The limitation is attributed to an
+           unfinished product rather than to the study, so nothing in the task
+           signals an experiment. Strings are IDENTICAL in all 11 cells and on
+           repeat clicks, so the message can't differentially discourage
+           clicking in one condition. Debrief carries the honesty load. */
+        const MSG_LINK    = "Link previews aren't available in this preview build.";
+        const MSG_SHARE   = "Sharing isn't available in this preview build.";
+        const MSG_LIBRARY = "The library isn't available in this preview build.";
+        const MSG_CHATS   = 'You do not have any saved chats yet.';
         function showModal(msg) { modalMessage.textContent = msg; modalOverlay.classList.add('active'); }
         function closeModal()    { modalOverlay.classList.remove('active'); }
         modalCloseBtn.addEventListener('click', e => { e.stopPropagation(); closeModal(); });
         modalOverlay.addEventListener('click', e => { e.stopPropagation(); if (e.target === modalOverlay) closeModal(); });
+        document.getElementById('sbSearchChats').addEventListener('click', () => showModal(MSG_CHATS));
+        document.getElementById('sbLibrary').addEventListener('click', () => showModal(MSG_LIBRARY));
         function lockInput() {
             messageInput.disabled = true;
             messageInput.placeholder = '';
@@ -693,7 +720,7 @@
                     window.hasClickedShare = true;
                     try { window.parent.chatbotShareClicked = true; } catch(e) {}
                 }
-                showModal('This function is not available at this time.');
+                showModal(MSG_SHARE);
             });
             row.appendChild(copyBtn);
             row.appendChild(shareBtn);
@@ -726,14 +753,16 @@
             });
         }
         /* ==================== GENERATION PHASE (IV1) ====================
-           Sequence:
-             Thinking  ->  preamble  ->  Searching the web... + 4 chips
-             ->  three trace steps, each with a live chevron
-             ->  collapses into "Worked for 26 seconds"
+           Sequence, ONE LINE AT A TIME — each cue replaces the last:
+             dots -> Thinking... -> preamble -> Searching the web... + chips
+             -> three trace steps -> collapses into "Worked for 26 seconds"
            Chips CYCLE through one shared slot so exposure time per domain is
-           identical across sets. The three trace steps are added at 17s, 20s
-           and 23s and STAY on screen (greyed) until generation ends, so each
-           is openable for the remainder of the window. */
+           identical across sets.
+           The trace steps arrive at 17s, 20s and 23s. In GIVEN they accumulate
+           (earlier ones greyed but present and clickable); in BURIED/BUTTON
+           each replaces the last, so only one is ever on screen. Either way a
+           label is clickable while it is visible, and a step still open when it
+           is removed is logged as 'step_truncated'. */
         async function runGenerationPhase(messageContent, shownSources) {
             const genBlock = document.createElement('div');
             genBlock.className = 'gen-block';
@@ -752,18 +781,16 @@
                 requestAnimationFrame(() => d.classList.add('on'));
                 return d;
             };
-            /* Greying also stops the shimmer on anything above, so only the
-               currently-active line animates. */
-            const greyOutAbove = (except) => {
-                Array.prototype.forEach.call(genBlock.children, c => {
-                    if (c === except) return;
-                    c.classList.add('past');
-                    Array.prototype.forEach.call(c.querySelectorAll('.shimmer'),
-                        s => s.classList.remove('shimmer'));
-                });
-            };
+            /* Only one cue is on screen at a time. Everything registered with
+               line() is cleared by the next clearLines() call, so the block
+               never stacks up and nothing above can be re-read. */
+            let liveLines = [];
+            const clearLines = () => { liveLines.forEach(el => el.remove()); liveLines = []; };
+            const line = (html, cls) => { const el = addStep(html, cls); liveLines.push(el); return el; };
+            const stopShimmer = (el) => Array.prototype.forEach.call(
+                el.querySelectorAll('.shimmer'), s => s.classList.remove('shimmer'));
             /* Step 1 - typing dots, in every condition. */
-            const dots = addStep('<span class="typing-indicator"><span></span><span></span><span></span></span>');
+            line('<span class="typing-indicator"><span></span><span></span><span></span></span>');
             await waitUntil(T_DOTS);
             if (COND.transparency === 'pure') {
                 /* Pure control: dots only, for the full duration. No process claim. */
@@ -771,9 +798,9 @@
                 genBlock.remove();
                 return;
             }
-            dots.remove();
+            clearLines();
             /* Step 2 - "Thinking..." in every non-pure condition. */
-            addStep('<span class="gen-label shimmer">Thinking...</span>');
+            line('<span class="gen-label shimmer">Thinking...</span>');
             trackEvent({ type: 'gen_step', step: 'thinking' });
             if (COND.transparency === 'thinking') {
                 /* Thinking control: contentless generation cue, held for the rest. */
@@ -782,9 +809,9 @@
                 return;
             }
             await waitUntil(T_THINKING);
-            /* Step 3 - the reasoning preamble. */
-            greyOutAbove(null);
-            addStep('<span>' + TASK.preamble + '</span>');
+            /* Step 3 - the reasoning preamble, replacing "Thinking...". */
+            clearLines();
+            line('<span>' + TASK.preamble + '</span>');
             trackEvent({ type: 'gen_step', step: 'preamble' });
             await waitUntil(T_PREAMBLE);
             /* Step 4 - searching cue. Sources CYCLE through one shared slot:
@@ -795,13 +822,13 @@
                The chevron here is DECORATIVE - the source list is reachable only
                from the post-answer panel, so all source-click timing is measured
                against a single affordance. */
-            greyOutAbove(null);
+            clearLines();
             const searchChev = SEARCH_CHEVRON_LIVE ? '' : '<span class="chev-static">&#9656;</span>';
-            addStep('<span class="gen-label shimmer">&#128269; Searching the web...</span>' + searchChev);
+            line('<span class="gen-label shimmer">&#128269; Searching the web...</span>' + searchChev);
             const slot = document.createElement('div');
             slot.className = 'gen-sources';
             genBlock.appendChild(slot);
-            greyOutAbove(slot);
+            liveLines.push(slot);
             const n = shownSources.length;
             const CHIP_GAP = Math.floor((T_SEARCH - T_PREAMBLE) / n);   // 1500ms at 4 chips
             for (let i = 0; i < n; i++) {
@@ -821,13 +848,40 @@
                 sourceCount: n
             });
             await waitUntil(T_SEARCH);
-            slot.remove();
-            /* Step 5 - the three trace steps, 3s apart, each with a live
-               chevron. They accumulate rather than replacing one another, so a
-               participant who wants to read step 1 can still do so at 25s. */
+            clearLines();
+            /* Step 5 - the three trace steps, 3s apart.
+               GIVEN accumulates them (earlier ones greyed, still on screen and
+               still clickable). BURIED/BUTTON cycle them, so only one label is
+               ever visible and the set is never seen together until the
+               participant opens the post-answer panel. */
+            const ACCUMULATE_STEPS = (COND.transparency === 'given');
+            let prevRow = null, prevDetail = null, prevIdx = -1;
+            /* Count a step that was open at the moment it was taken away, so
+               mid-read interruptions are visible in the data rather than
+               silently inflating non-engagement. */
+            const retireStep = (removeIt) => {
+                if (!prevRow) return;
+                if (!prevDetail.classList.contains('hidden')) {
+                    window.stepsTruncated += 1;
+                    trackEvent({
+                        type: 'step_truncated',
+                        stepIndex: prevIdx + 1,
+                        stepLabel: TASK.steps[prevIdx].label,
+                        removedBy: removeIt ? 'next_step' : 'generation_end'
+                    });
+                }
+                if (removeIt) prevRow.remove();
+            };
             for (let k = 0; k < TASK.steps.length; k++) {
                 await waitUntil(T_SEARCH + k * STEP_GAP);
-                greyOutAbove(null);
+                if (prevRow) {
+                    if (ACCUMULATE_STEPS) {
+                        prevRow.classList.add('past');
+                        stopShimmer(prevRow);
+                    } else {
+                        retireStep(true);
+                    }
+                }
                 const st  = TASK.steps[k];
                 const row = addStep('', 'gen-trace');
                 const btn = document.createElement('button');
@@ -846,10 +900,12 @@
                 });
                 row.appendChild(btn);
                 row.appendChild(detail);
+                prevRow = row; prevDetail = detail; prevIdx = k;
                 chatContainer.scrollTop = chatContainer.scrollHeight;
                 trackEvent({ type: 'gen_step', step: 'trace_step_' + (k + 1), stepLabel: st.label });
             }
             await waitUntil(TOTAL_MS);
+            retireStep(false);   // logs only; the whole block goes next anyway
             genBlock.remove();
         }
         /* ==================== REASONING DISPLAY (IV2) ====================
@@ -874,13 +930,13 @@
                 repeat: window.hasClickedSource ? 1 : 0
             });
             if (window.hasClickedSource) {
-                showModal('This function is not available at this time.');
+                showModal(MSG_LINK);
                 return;
             }
             window.hasClickedSource   = true;
             window.clickedSourceLabel = sourceName;
             try { window.parent.chatbotSourceClicked = true; } catch(e) {}
-            showModal('This function is not available at this time.');
+            showModal(MSG_LINK);
         }
         /* Panel layout mirrors the generation order:
              preamble  ->  Searched N websites (nested)  ->  three trace steps
@@ -1165,6 +1221,7 @@
                 + '\nsources=' + (CONDITION_SOURCES.map(s => s.name + '[' + s.cred + ']').join(', ') || '(none)')
                 + '\nbuttonPosition=' + BUTTON_POSITION
                 + '\nstepsInPanel=' + STEPS_IN_PANEL + '  stepsOpenByDefault=' + STEPS_OPEN_BY_DEFAULT
+                + '\ngenStepMode=' + (COND.transparency === 'given' ? 'ACCUMULATE (all 3 stay)' : 'CYCLE (one at a time)')
                 + '\nsearchChevronLive=' + SEARCH_CHEVRON_LIVE
                 + '\ntraceWords=' + traceWords + ' (preamble ' + wc(TASK.preamble)
                 + ' + labels ' + labelWords + ' + details ' + detailWords + ')'
@@ -1240,6 +1297,8 @@
                     anyStepOpened:       (window.genStepClicks + window.panelStepClicks) > 0 ? 1 : 0,
                     firstStepExpandMs:   window.firstStepExpandMs,
                     firstStepExpandWhere: window.firstStepExpandWhere,
+                    stepsTruncated:      window.stepsTruncated,
+                    stepsCycled:         (COND.transparency === 'given') ? 0 : 1,
                     verifyClicked:    0,
                     shareClicked:     window.hasClickedShare ? 1 : 0
                 });
