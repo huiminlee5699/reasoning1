@@ -196,11 +196,12 @@
 
            The trace steps are where the cells diverge:
              - GIVEN: the three steps ACCUMULATE and stay on screen through to
-               26s, earlier ones greyed. All three are visible together and all
-               three stay clickable.
+               26s, earlier ones greyed, and each arrives with its PARAGRAPH
+               ALREADY OPEN. The whole trace is readable during the wait.
              - BURIED / BUTTON: the three steps CYCLE, one at a time, each
-               replacing the last after 3s. A participant never sees more than
-               one at once and never sees all three together during generation.
+               replacing the last after 3s, and each shows its LABEL ONLY. A
+               participant never sees more than one at once, never sees all
+               three together, and sees no paragraph unless they click.
            In every cell a step label is clickable for as long as it is on
            screen. A step open at the moment it is replaced is logged as
            'step_truncated' so mid-read interruptions are countable.
@@ -907,10 +908,13 @@
                 const row = addStep('', 'gen-trace');
                 const btn = document.createElement('button');
                 btn.className = 'gen-step-toggle';
-                btn.innerHTML = '<span class="chev">&#9656;</span>'
+                /* GIVEN: each step arrives with its paragraph already open, so
+                   the full trace is readable during the wait as well as after.
+                   BURIED/BUTTON: label only, paragraph behind the chevron. */
+                btn.innerHTML = '<span class="chev' + (PANEL_FULLY_OPEN ? ' open' : '') + '">&#9656;</span>'
                               + '<span class="gen-label shimmer">' + st.label + '</span>';
                 const detail = document.createElement('div');
-                detail.className = 'gen-step-detail hidden';
+                detail.className = 'gen-step-detail' + (PANEL_FULLY_OPEN ? '' : ' hidden');
                 detail.textContent = st.detail;
                 btn.addEventListener('click', () => {
                     const opening = detail.classList.contains('hidden');
