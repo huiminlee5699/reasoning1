@@ -204,7 +204,8 @@
                three together, and sees no paragraph unless they click.
            In every cell a step label is clickable for as long as it is on
            screen. A step open at the moment it is replaced is logged as
-           'step_truncated' so mid-read interruptions are countable.
+           'step_interrupted' so mid-read interruptions are countable (this is
+           NOT a collapse - the participant did not choose it).
 
            POST-ANSWER PANEL reproduces the preamble, the source list and all
            three steps in every non-control cell, with identical controls. Only
@@ -502,14 +503,26 @@
         window.hasExpandedSearched         = false;
         window.firstSearchedExpandMs       = null;
         window.answerDoneMs                = null;
-        /* --- trace-step engagement ------------------------------------- */
+        /* --- trace-step engagement -------------------------------------
+           OPENS and CLOSES are counted separately, because which one is the
+           voluntary act depends on the cell. In buried/button the steps arrive
+           closed, so opening is the behaviour. In given they arrive open, so
+           closing is. Pooling them would average two opposite things. */
         window.stepOpenedGen        = [0, 0, 0];  // opened during generation
         window.stepOpenedPanel      = [0, 0, 0];  // opened in the post-answer panel
-        window.genStepClicks        = 0;
-        window.panelStepClicks      = 0;
+        window.stepClosedGen        = [0, 0, 0];
+        window.stepClosedPanel      = [0, 0, 0];
+        window.genStepClicks        = 0;          // opens, generation
+        window.panelStepClicks      = 0;          // opens, panel
+        window.genStepCloseClicks   = 0;
+        window.panelStepCloseClicks = 0;
         window.firstStepExpandMs    = null;
         window.firstStepExpandWhere = '';         // 'generation' | 'reasoning'
-        window.stepsTruncated       = 0;          // open when taken off screen
+        window.firstStepCloseMs     = null;
+        window.stepsInterrupted     = 0;          // open when taken off screen
+        /* --- source-click counters -------------------------------------- */
+        window.credibleClicks       = 0;          // clicks on cred = 1 domains
+        window.noncredibleClicks    = 0;          // clicks on cred = 0 domains
         try {
             window.parent.chatbotDone          = false;
             window.parent.chatbotSourceClicked = false;
@@ -669,15 +682,18 @@
                 const sents = splitSentences(t.split('\n').join(' '));
                 if (sentIdx >= sents.length) return;
                 if (!plan[blockIdx]) plan[blockIdx] = [];
-                plan[blockIdx].push({ source: s, afterSentence: sentIdx });
+                /* position = which of the four slots this domain occupies, so
+                   an answer-chip click is comparable with a reasoning click
+                   instead of always logging 0. */
+                plan[blockIdx].push({ source: s, afterSentence: sentIdx, position: k + 1 });
             });
             return plan;
         }
-        function makeCiteChip(s) {
+        function makeCiteChip(s, position) {
             const chip = document.createElement('span');
             chip.className = 'cite-chip';
             chip.innerHTML = '&#128279; ' + s.name;
-            chip.addEventListener('click', () => onSourceClick(s.name, 0, s.cred, 'answer'));
+            chip.addEventListener('click', () => onSourceClick(s.name, position || 0, s.cred, 'answer'));
             return chip;
         }
         async function streamFormattedAnswer(container, text, citePlan) {
@@ -729,7 +745,7 @@
                         for (let si = 0; si < sents.length; si++) {
                             await streamMarkdownTextInto(p, (si ? ' ' : '') + sents[si]);
                             cites.filter(c => c.afterSentence === si)
-                                 .forEach(c => p.appendChild(makeCiteChip(c.source)));
+                                 .forEach(c => p.appendChild(makeCiteChip(c.source, c.position)));
                             chatContainer.scrollTop = chatContainer.scrollHeight;
                         }
                     }
@@ -780,13 +796,23 @@
                     window.firstStepExpandMs    = sinceLoad();
                     window.firstStepExpandWhere = location;
                 }
+            } else {
+                if (location === 'generation') {
+                    window.stepClosedGen[idx] = 1;
+                    window.genStepCloseClicks += 1;
+                } else {
+                    window.stepClosedPanel[idx] = 1;
+                    window.panelStepCloseClicks += 1;
+                }
+                if (window.firstStepCloseMs === null) window.firstStepCloseMs = sinceLoad();
             }
             trackEvent({
                 type:      opening ? 'step_expand' : 'step_collapse',
                 stepIndex: idx + 1,
                 stepLabel: label,
                 location:  location,          // 'generation' | 'reasoning'
-                firstStepExpandMs: window.firstStepExpandMs
+                firstStepExpandMs: window.firstStepExpandMs,
+                firstStepCloseMs:  window.firstStepCloseMs
             });
         }
         /* ==================== GENERATION PHASE (IV1) ====================
@@ -799,7 +825,7 @@
            (earlier ones greyed but present and clickable); in BURIED/BUTTON
            each replaces the last, so only one is ever on screen. Either way a
            label is clickable while it is visible, and a step still open when it
-           is removed is logged as 'step_truncated'. */
+           is removed is logged as 'step_interrupted'. */
         async function runGenerationPhase(messageContent, shownSources) {
             const genBlock = document.createElement('div');
             genBlock.className = 'gen-block';
@@ -902,9 +928,13 @@
             const retireStep = (removeIt) => {
                 if (!prevRow) return;
                 if (!prevDetail.classList.contains('hidden')) {
-                    window.stepsTruncated += 1;
+                    /* NOT a collapse. The participant had this paragraph open
+                       and the interface took it away — either the next step
+                       replaced it, or generation ended. An interruption, not a
+                       choice, so it must never be pooled with step_collapse. */
+                    window.stepsInterrupted += 1;
                     trackEvent({
-                        type: 'step_truncated',
+                        type: 'step_interrupted',
                         stepIndex: prevIdx + 1,
                         stepLabel: TASK.steps[prevIdx].label,
                         removedBy: removeIt ? 'next_step' : 'generation_end'
@@ -974,14 +1004,15 @@
             window.sourceClickCount += 1;
             if (location === 'answer') window.answerSourceClicks += 1;
             else                       window.reasoningSourceClicks += 1;
+            if (cred === 1) window.credibleClicks += 1;
+            else            window.noncredibleClicks += 1;
             trackEvent({
                 type: 'source_click',
                 sourceLabel: sourceName,
                 sourceCred: cred,          // 1 = authoritative, 0 = dubious
                 location: location,        // 'answer' | 'reasoning'
-                position: position,
-                clickIndex: window.sourceClickCount,
-                repeat: window.hasClickedSource ? 1 : 0
+                position: position,        // 1-4, logged to 'events' only
+                clickIndex: window.sourceClickCount   // >1 is a repeat
             });
             if (window.hasClickedSource) {
                 showModal(MSG_LINK);
@@ -1363,12 +1394,16 @@
                     answerSourceOrder: window.answerSourceOrder,
                     citePositions:    window.citePositions,
                     sourceClicked:    window.hasClickedSource ? 1 : 0,
-                    sourceLabel:      window.clickedSourceLabel || '',
-                    sourceLocation:   window.clickedSourceLocation || '',
-                    sourceCred:       window.clickedSourceCred,
+                    clickedInAnswer:    window.answerSourceClicks    > 0 ? 1 : 0,
+                    clickedInReasoning: window.reasoningSourceClicks > 0 ? 1 : 0,
                     sourceClicks:     window.sourceClickCount,
                     answerSourceClicks:    window.answerSourceClicks,
                     reasoningSourceClicks: window.reasoningSourceClicks,
+                    credibleClicks:        window.credibleClicks,
+                    noncredibleClicks:     window.noncredibleClicks,
+                    sourceLabel:      window.clickedSourceLabel || '',
+                    sourceLocation:   window.clickedSourceLocation || '',
+                    sourceCred:       window.clickedSourceCred,
                     expanded:         window.hasExpandedReasoning ? 1 : 0,
                     firstExpandMs:    window.firstExpandMs,
                     duringGeneration: window.expandedDuringGeneration,
@@ -1379,12 +1414,17 @@
                     panelFullyOpen:      PANEL_FULLY_OPEN ? 1 : 0,
                     stepsOpenedGen:      window.stepOpenedGen.join(''),    // e.g. "010"
                     stepsOpenedPanel:    window.stepOpenedPanel.join(''),
+                    stepsClosedGen:      window.stepClosedGen.join(''),
+                    stepsClosedPanel:    window.stepClosedPanel.join(''),
                     genStepClicks:       window.genStepClicks,
                     panelStepClicks:     window.panelStepClicks,
+                    genStepCloseClicks:  window.genStepCloseClicks,
+                    panelStepCloseClicks: window.panelStepCloseClicks,
                     anyStepOpened:       (window.genStepClicks + window.panelStepClicks) > 0 ? 1 : 0,
+                    anyStepClosed:       (window.genStepCloseClicks + window.panelStepCloseClicks) > 0 ? 1 : 0,
                     firstStepExpandMs:   window.firstStepExpandMs,
                     firstStepExpandWhere: window.firstStepExpandWhere,
-                    stepsTruncated:      window.stepsTruncated,
+                    firstStepCloseMs:    window.firstStepCloseMs,
                     stepsCycled:         (COND.transparency === 'given') ? 0 : 1,
                     shareClicked:     window.hasClickedShare ? 1 : 0
             }, useBeacon);
