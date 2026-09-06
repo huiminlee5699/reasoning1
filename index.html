@@ -249,7 +249,11 @@
         const SESSION_ID     = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
         const PAGE_LOAD_TIME = Date.now();
         function sinceLoad() { return Date.now() - PAGE_LOAD_TIME; }
-        function trackEvent(obj) {
+        /* useBeacon: for the exit write only. A normal fetch started as the page
+           is unloading is routinely cancelled by the browser, so the summary
+           row would be lost exactly when it matters. sendBeacon is queued by
+           the browser and survives the unload. */
+        function trackEvent(obj, useBeacon) {
             const payload = Array.isArray(obj) ? obj : [obj];
             payload.forEach(ev => {
                 ev.participantId = PARTICIPANT_ID;
@@ -259,7 +263,18 @@
                 ev.sinceLoadMs   = sinceLoad();
                 ev.userAgent     = navigator.userAgent;
             });
-            fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) }).catch(() => {});
+            const body = JSON.stringify(payload);
+            if (useBeacon && navigator.sendBeacon) {
+                try {
+                    if (navigator.sendBeacon(APPS_SCRIPT_URL,
+                            new Blob([body], { type: 'text/plain' }))) return;
+                } catch (e) { /* fall through to fetch */ }
+            }
+            fetch(APPS_SCRIPT_URL, {
+                method: 'POST', mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: body, keepalive: !!useBeacon
+            }).catch(() => {});
         }
         /* ============================ TIMING ============================
            Total generation time is IDENTICAL in all 11 cells and in both
@@ -472,6 +487,9 @@
         window.hasCollapsedReasoning       = false;
         window.scriptedTopic               = null;
         window.clickedSourceLabel          = '';
+        window.clickedSourceLocation       = '';   // 'answer' | 'reasoning', first click
+        window.clickedSourceCred           = '';   // 1 authoritative / 0 dubious, first click
+        window.summarySent                 = false;// acted_summary writes exactly once
         window.sourceClickCount            = 0;   // counts repeats too, even though the UI locks
         window.firstExpandMs               = null;
         window.expandedDuringGeneration    = null; // 1 = opened before the answer finished
@@ -969,8 +987,10 @@
                 showModal(MSG_LINK);
                 return;
             }
-            window.hasClickedSource   = true;
-            window.clickedSourceLabel = sourceName;
+            window.hasClickedSource      = true;
+            window.clickedSourceLabel    = sourceName;
+            window.clickedSourceLocation = location;
+            window.clickedSourceCred     = cred;
             try { window.parent.chatbotSourceClicked = true; } catch(e) {}
             showModal(MSG_LINK);
         }
@@ -1309,10 +1329,31 @@
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
-        window.addEventListener('message', function(event) {
-            if (event.data === 'chatbot_submit') {
-                trackEvent({
+        /* ===================== EXIT SUMMARY =============================
+           One row per participant, written EXACTLY ONCE. Two triggers:
+             'qualtrics_next' - the parent frame posts 'chatbot_submit' when
+                                the participant clicks Next. Normal path.
+             'pagehide'       - the page is being unloaded without that
+                                message: they closed the tab, timed out, or
+                                the stimulus is being run standalone (no
+                                parent frame exists to send anything).
+           The guard means whichever fires first wins and the second is a
+           no-op, so Next-then-unload does not produce two rows.
+
+           exitMs is the clock reading at that moment; dwell is derived in
+           Apps Script as exitMs - answerDoneMs, i.e. how long they sat with
+           the finished answer before moving on. Blank if the answer never
+           finished. NOTE: visibilitychange is deliberately NOT a trigger —
+           it fires on a mid-task tab switch, which would close the row early
+           and swallow everything the participant did afterwards. */
+        function sendSummary(trigger, useBeacon) {
+            if (window.summarySent) return;
+            window.summarySent = true;
+            trackEvent({
                     type:             'acted_summary',
+                    exitTrigger:      trigger,
+                    exitMs:           sinceLoad(),
+                    answerDoneMs:     window.answerDoneMs,
                     topic:            window.scriptedTopic,
                     task:             TASK_ID,
                     credibility:      COND.credibility,
@@ -1323,6 +1364,8 @@
                     citePositions:    window.citePositions,
                     sourceClicked:    window.hasClickedSource ? 1 : 0,
                     sourceLabel:      window.clickedSourceLabel || '',
+                    sourceLocation:   window.clickedSourceLocation || '',
+                    sourceCred:       window.clickedSourceCred,
                     sourceClicks:     window.sourceClickCount,
                     answerSourceClicks:    window.answerSourceClicks,
                     reasoningSourceClicks: window.reasoningSourceClicks,
@@ -1343,11 +1386,13 @@
                     firstStepExpandWhere: window.firstStepExpandWhere,
                     stepsTruncated:      window.stepsTruncated,
                     stepsCycled:         (COND.transparency === 'given') ? 0 : 1,
-                    verifyClicked:    0,
                     shareClicked:     window.hasClickedShare ? 1 : 0
-                });
-            }
+            }, useBeacon);
+        }
+        window.addEventListener('message', function(event) {
+            if (event.data === 'chatbot_submit') sendSummary('qualtrics_next', false);
         });
+        window.addEventListener('pagehide', function() { sendSummary('pagehide', true); });
     </script>
 </body>
 </html>
