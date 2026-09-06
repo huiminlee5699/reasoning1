@@ -78,6 +78,14 @@
         .gen-sources.on { opacity: 1; transform: none; }
         .shimmer { background: linear-gradient(90deg, #9ca3af 25%, #d1d5db 50%, #9ca3af 75%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: sh 1.6s linear infinite; }
         @keyframes sh { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+        /* --- expandable trace steps DURING generation --------------------- */
+        .gen-step.gen-trace { display: block; }
+        .gen-step-toggle { display: inline-flex; align-items: flex-start; gap: 7px; background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; font-size: 14px; color: inherit; text-align: left; line-height: 1.65; }
+        .gen-step-toggle:hover { color: #374151; }
+        .gen-step.past .gen-step-toggle:hover { color: #6b7280; }
+        .gen-step-detail { border-left: 2px solid #e5e7eb; margin: 6px 0 2px 6px; padding: 2px 0 2px 14px; color: #6b7280; font-size: 14px; line-height: 1.7; }
+        /* decorative chevron on "Searching the web..." — not interactive */
+        .chev-static { display: inline-block; color: #9ca3af; font-size: 12px; margin-left: 4px; }
         .reason-wrap { margin: 0 0 14px; }
         .reason-wrap.below { margin: 16px 0 0; }
         .buried-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 2px 0; cursor: pointer; font-family: inherit; font-size: 14px; color: #9ca3af; }
@@ -98,6 +106,13 @@
         .reason-sources { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
         .src-link { display: inline-flex; align-items: center; gap: 6px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 10px; padding: 6px 12px; font-size: 13px; color: #374151; cursor: pointer; transition: background-color .2s, border-color .2s; max-width: 100%; white-space: nowrap; }
         .src-link:hover { background-color: #e5e7eb; border-color: #d1d5db; }
+        /* --- expandable trace steps INSIDE the post-answer panel ----------- */
+        .reason-steps { margin-top: 14px; }
+        .step-row { margin-bottom: 10px; }
+        .step-row:last-child { margin-bottom: 0; }
+        .step-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 2px 0; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 500; color: #6b7280; text-align: left; }
+        .step-toggle:hover { color: #374151; }
+        .step-detail { margin: 6px 0 0 6px; padding-left: 14px; border-left: 2px solid #e5e7eb; color: #6b7280; font-size: 14.5px; line-height: 1.75; }
         /* inline citation chip inside the answer body */
         .cite-chip { display: inline-flex; align-items: center; gap: 5px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 20px; padding: 1px 9px; font-size: 11.5px; color: #6b7280; margin-left: 6px; vertical-align: baseline; cursor: pointer; white-space: nowrap; transition: background-color .2s, border-color .2s; }
         .cite-chip:hover { background-color: #e5e7eb; border-color: #d1d5db; color: #374151; }
@@ -160,6 +175,25 @@
 
            Example iframe src:
              .../aireasoning_stimulus.html?participantId=${e://Field/ResponseID}&task=A&condition=mixed_button
+
+           ---------------------------------------------------------------
+           REASONING TRACE (revised)
+           The single status label has been replaced by THREE labelled trace
+           steps, each carrying a short first-person paragraph behind its own
+           chevron. Readable trace text (preamble + 3 labels + 3 details) is
+           156 words in BOTH tasks, so content volume is matched across tasks
+           as well as across cells. The debug panel prints the live count —
+           re-check it after any edit to the trace wording.
+
+           Where the steps appear, and in what state:
+             - During generation: all three stream in, each with a LIVE
+               chevron the participant can open while the answer is still
+               being produced.
+             - In the post-answer panel: all three are reproduced. Default
+               state is COLLAPSED in buried/button and OPEN in given, so the
+               'given' cell genuinely gives the trace rather than merely
+               surfacing the handle to it.
+           Set STEPS_IN_PANEL to false to keep the steps generation-only.
            ################################################################### */
         /* >>> REPLACE with the deployment URL for the AI Reasoning study <<< */
         const APPS_SCRIPT_URL = 'PASTE_NEW_APPS_SCRIPT_URL_HERE';
@@ -169,6 +203,12 @@
            'above' keeps Buried, Button and Given in the SAME screen position, so
            IV2 varies only salience and not location. */
         const BUTTON_POSITION = 'above';
+        /* Trace steps are reproduced in the post-answer panel. Set false to make
+           them visible only while the answer is generating. */
+        const STEPS_IN_PANEL = true;
+        /* Chevron on "Searching the web..." during generation is decorative —
+           the source list is only openable from the post-answer panel. */
+        const SEARCH_CHEVRON_LIVE = false;
         const COPY_SVG   = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
   <rect x="8" y="8" width="13" height="13" rx="2.5" ry="2.5"></rect>
   <path d="M16 8V5.5A2.5 2.5 0 0 0 13.5 3H5.5A2.5 2.5 0 0 0 3 5.5v8A2.5 2.5 0 0 0 5.5 16H8"></path>
@@ -206,14 +246,23 @@
            tasks. Otherwise latency is confounded with condition, and
            identical answers are rated more thoughtful after longer waits.
            Phase boundaries are absolute offsets from generation start and
-           always end at TOTAL_MS. "Worked for 20 seconds" is derived from
-           TOTAL_MS, so changing one number keeps the label honest. */
-        const TOTAL_MS   = 20000;   // 20s, matching the "Worked for 20s" badge
+           always end at TOTAL_MS. "Worked for 26 seconds" is derived from
+           TOTAL_MS, so changing one number keeps the label honest.
+
+           Extended from 20s to 26s so the three trace steps get ~3s each —
+           enough to read a label and reach for its chevron. The extra 6s is
+           applied to every cell including the two controls, so latency stays
+           constant across conditions. */
+        const TOTAL_MS   = 26000;   // 26s, matching the "Worked for 26 seconds" badge
         const T_DOTS     = 2000;    // typing dots -> Thinking...
         const T_THINKING = 5000;    // Thinking... -> preamble
         const T_PREAMBLE = 11000;   // preamble -> Searching the web + chips
-        const T_SEARCH   = 17000;   // chips -> status label
+        const T_SEARCH   = 17000;   // chips -> first trace step
         const FADE_MS    = 260;
+        /* Trace steps occupy [T_SEARCH, TOTAL_MS), split evenly three ways:
+           step 1 @17s, step 2 @20s, step 3 @23s, answer starts @26s. */
+        const STEP_COUNT = 3;
+        const STEP_GAP   = Math.floor((TOTAL_MS - T_SEARCH) / STEP_COUNT);   // 3000ms
         /* ========================= SOURCE SETS ==========================
            Four chips per condition, all shown together.
            Mixed = the first two credible + the first two non-credible, then
@@ -223,7 +272,25 @@
                 topic: 'taskA_creditcards',
                 question: "I have two old credit cards I don't use anymore. Card 1 is my oldest, opened in 2009, $2,000 limit, no annual fee. Card 2 is from 2019, $12,000 limit, $95 annual fee. I pay my main card in full every month. I'm planning to apply for a mortgage in about eight months. I've heard closing unused cards cleans up your credit and boosts your score. Should I close them?",
                 preamble: "With a mortgage eight months out, this is really a question of timing and what underwriters look at. The two cards have different tradeoffs, so I'm checking the current scoring and mortgage guidance before giving you a recommendation.",
-                statusLabel: "Assessing closure impact",
+                /* Three trace steps. Label = what flashes; detail = what the
+                   chevron reveals. Each step's reasoning resolves in the same
+                   direction the answer lands, so a participant who opens the
+                   trace finds it internally consistent with the recommendation.
+                   Readable trace total: 156 words (matched to Task B). */
+                steps: [
+                    {
+                        label: 'Assessing closure impact',
+                        detail: "I'm looking at what each card contributes to the file. Neither is in use, so what they mainly add is $14,000 of open credit a lender can see is available to draw on. Card 1's history is the thing worth protecting, and I'm confirming it's retained after closure."
+                    },
+                    {
+                        label: 'Weighing the annual fee',
+                        detail: "Card 2 costs $95 a year for a line that isn't being charged to. I'm checking whether there's an offsetting benefit that would justify keeping it open through the application."
+                    },
+                    {
+                        label: 'Confirming mortgage timing',
+                        detail: "Dormant accounts move the score less than active ones, so I'm checking how long any adjustment takes to settle and whether eight months clears it comfortably before the lender pulls."
+                    }
+                ],
                 credible: [
                     { name: 'www.consumerfinance.gov', title: 'Does closing a credit card hurt my credit score?' },
                     { name: 'www.experian.com',        title: 'How closing a credit card affects your credit' },
@@ -241,8 +308,25 @@
             B: {
                 topic: 'taskB_melatonin',
                 question: "I've had trouble falling asleep for about four months. I usually don't fall asleep until 2 or 3am, but I sleep straight through once I'm out, and on weekends when I can sleep in till 11 I wake up feeling fine. I started a 9am job recently and I also bought 10mg melatonin gummies. I've heard melatonin is natural and safe. Should I start taking one every night at bedtime?",
-                preamble: "Your pattern points to difficulty at the falling-asleep stage rather than staying asleep. Dose and timing matter more here than the product itself, so I'm checking the current sleep-medicine guidance before giving you a recommendation.",
-                statusLabel: "Evaluating sleep concerns",
+                preamble: "Your pattern points to difficulty at the falling-asleep stage rather than staying asleep. Dose and timing matter more here than the product itself, so I'm checking current sleep-medicine guidance before giving you a recommendation.",
+                /* Readable trace total: 156 words (matched to Task A). Step 1
+                   deliberately notices the weekend lie-in — the diagnostic tell —
+                   and dismisses it plausibly, so the trace reads as thorough
+                   while still landing on the wrong recommendation. */
+                steps: [
+                    {
+                        label: 'Evaluating sleep concerns',
+                        detail: "Sleeping straight through and waking rested points to intact sleep architecture, so the problem is isolated to onset rather than maintenance. The weekend lie-in reads as catch-up for the weekday deficit rather than a separate pattern, which keeps this in sleep-onset territory."
+                    },
+                    {
+                        label: 'Checking dosage guidance',
+                        detail: "10 mg is what most over-the-counter gummies are formulated at, so I'm treating it as the standard adult dose rather than something to titrate up from. Checking whether that amount carries any ceiling concerns for continuous use."
+                    },
+                    {
+                        label: 'Confirming timing and duration',
+                        detail: "Taking it at bedtime puts the signal where the sleep is wanted, so I'm checking how many nights that typically takes to hold and whether nightly use raises any dependence or suppression issues."
+                    }
+                ],
                 credible: [
                     { name: 'www.nccih.nih.gov',  title: 'Melatonin: what you need to know' },
                     { name: 'www.acponline.org',  title: 'Management of chronic insomnia disorder in adults' },
@@ -293,6 +377,11 @@
         }
         const COND = parseCondition(CONDITION);
         const IS_CONTROL = COND.credibility === 'control';
+        /* In the post-answer panel the trace steps open by default ONLY in the
+           'given' cell. Buried and Button hand over the same content behind one
+           extra click each, so IV2 varies the effort to reach the trace rather
+           than whether the trace exists. */
+        const STEPS_OPEN_BY_DEFAULT = (COND.transparency === 'given');
         /* Sources shown in the REASONING (generation chips + expanded panel).
            Controls show no reasoning at all, so this is empty for them. */
         const CONDITION_SOURCES = IS_CONTROL ? [] : SOURCE_SETS[COND.credibility];
@@ -362,6 +451,13 @@
         window.hasExpandedSearched         = false;
         window.firstSearchedExpandMs       = null;
         window.answerDoneMs                = null;
+        /* --- trace-step engagement ------------------------------------- */
+        window.stepOpenedGen        = [0, 0, 0];  // opened during generation
+        window.stepOpenedPanel      = [0, 0, 0];  // opened in the post-answer panel
+        window.genStepClicks        = 0;
+        window.panelStepClicks      = 0;
+        window.firstStepExpandMs    = null;
+        window.firstStepExpandWhere = '';         // 'generation' | 'reasoning'
         try {
             window.parent.chatbotDone          = false;
             window.parent.chatbotSourceClicked = false;
@@ -464,7 +560,7 @@
             }
         }
         /* ================= IN-ANSWER CITATION PLACEMENT =================
-           One chip per source, dropped at a randomly chosen sentence boundary.
+           One chip per source, dropped at a fixed sentence boundary.
            Eligible blocks exclude the opening verdict line (which is the answer's
            first sentence) and the closing "Bottom line:" block. Both task answers
            have exactly four body paragraphs between those two, so with four
@@ -603,13 +699,41 @@
             row.appendChild(shareBtn);
             return row;
         }
+        /* ================== TRACE-STEP EXPAND TRACKING ==================
+           Logged separately by location, because opening a step mid-stream
+           (a participant who pauses to read while the answer is still coming)
+           and opening one afterwards are different behaviours. */
+        function registerStepToggle(idx, label, opening, location) {
+            if (opening) {
+                if (location === 'generation') {
+                    window.stepOpenedGen[idx] = 1;
+                    window.genStepClicks += 1;
+                } else {
+                    window.stepOpenedPanel[idx] = 1;
+                    window.panelStepClicks += 1;
+                }
+                if (window.firstStepExpandMs === null) {
+                    window.firstStepExpandMs    = sinceLoad();
+                    window.firstStepExpandWhere = location;
+                }
+            }
+            trackEvent({
+                type:      opening ? 'step_expand' : 'step_collapse',
+                stepIndex: idx + 1,
+                stepLabel: label,
+                location:  location,          // 'generation' | 'reasoning'
+                firstStepExpandMs: window.firstStepExpandMs
+            });
+        }
         /* ==================== GENERATION PHASE (IV1) ====================
-           Sequence, matching the stimulus doc:
+           Sequence:
              Thinking  ->  preamble  ->  Searching the web... + 4 chips
-             ->  status label  ->  collapses into "Worked for 20 seconds"
-           All four chips appear TOGETHER and stay up for the whole search
-           window, so every participant gets the same reading time for every
-           domain regardless of set. */
+             ->  three trace steps, each with a live chevron
+             ->  collapses into "Worked for 26 seconds"
+           Chips CYCLE through one shared slot so exposure time per domain is
+           identical across sets. The three trace steps are added at 17s, 20s
+           and 23s and STAY on screen (greyed) until generation ends, so each
+           is openable for the remainder of the window. */
         async function runGenerationPhase(messageContent, shownSources) {
             const genBlock = document.createElement('div');
             genBlock.className = 'gen-block';
@@ -628,9 +752,14 @@
                 requestAnimationFrame(() => d.classList.add('on'));
                 return d;
             };
+            /* Greying also stops the shimmer on anything above, so only the
+               currently-active line animates. */
             const greyOutAbove = (except) => {
                 Array.prototype.forEach.call(genBlock.children, c => {
-                    if (c !== except) c.classList.add('past');
+                    if (c === except) return;
+                    c.classList.add('past');
+                    Array.prototype.forEach.call(c.querySelectorAll('.shimmer'),
+                        s => s.classList.remove('shimmer'));
                 });
             };
             /* Step 1 - typing dots, in every condition. */
@@ -662,9 +791,13 @@
                each fades in, holds, and fades out before the next arrives, so
                only ever one chip is on screen. Each owns an equal window
                [T_PREAMBLE + i*gap, T_PREAMBLE + (i+1)*gap), which keeps exposure
-               time identical across chips and across cells. */
+               time identical across chips and across cells.
+               The chevron here is DECORATIVE - the source list is reachable only
+               from the post-answer panel, so all source-click timing is measured
+               against a single affordance. */
             greyOutAbove(null);
-            addStep('<span class="gen-label shimmer">&#128269; Searching the web...</span>');
+            const searchChev = SEARCH_CHEVRON_LIVE ? '' : '<span class="chev-static">&#9656;</span>';
+            addStep('<span class="gen-label shimmer">&#128269; Searching the web...</span>' + searchChev);
             const slot = document.createElement('div');
             slot.className = 'gen-sources';
             genBlock.appendChild(slot);
@@ -689,21 +822,44 @@
             });
             await waitUntil(T_SEARCH);
             slot.remove();
-            /* Step 5 - task-specific status label. */
-            greyOutAbove(null);
-            addStep('<span class="gen-label shimmer">' + TASK.statusLabel + '</span>');
-            trackEvent({ type: 'gen_step', step: 'status_label' });
+            /* Step 5 - the three trace steps, 3s apart, each with a live
+               chevron. They accumulate rather than replacing one another, so a
+               participant who wants to read step 1 can still do so at 25s. */
+            for (let k = 0; k < TASK.steps.length; k++) {
+                await waitUntil(T_SEARCH + k * STEP_GAP);
+                greyOutAbove(null);
+                const st  = TASK.steps[k];
+                const row = addStep('', 'gen-trace');
+                const btn = document.createElement('button');
+                btn.className = 'gen-step-toggle';
+                btn.innerHTML = '<span class="chev">&#9656;</span>'
+                              + '<span class="gen-label shimmer">' + st.label + '</span>';
+                const detail = document.createElement('div');
+                detail.className = 'gen-step-detail hidden';
+                detail.textContent = st.detail;
+                btn.addEventListener('click', () => {
+                    const opening = detail.classList.contains('hidden');
+                    detail.classList.toggle('hidden');
+                    btn.querySelector('.chev').classList.toggle('open', opening);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    registerStepToggle(k, st.label, opening, 'generation');
+                });
+                row.appendChild(btn);
+                row.appendChild(detail);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                trackEvent({ type: 'gen_step', step: 'trace_step_' + (k + 1), stepLabel: st.label });
+            }
             await waitUntil(TOTAL_MS);
             genBlock.remove();
         }
         /* ==================== REASONING DISPLAY (IV2) ====================
            The expanded body reproduces what the collapsed panel contained
-           during generation - preamble, status label, "Searched 4 websites",
-           and the four sources as clickable rows. This mirrors real ChatGPT,
-           where expanding "Worked for Ns" re-reveals the streamed summary
-           rather than a deeper trace. IV2 therefore manipulates continued
-           ACCESS to the reasoning after the answer lands, not access to
-           extra content. */
+           during generation - preamble, "Searched 4 websites" with the four
+           sources, and the three trace steps with their detail text. IV2
+           therefore manipulates the EFFORT required to reach the trace, not
+           whether the trace exists: every non-control cell can reach the same
+           156 words, but Buried hides the handle, Button labels it, and Given
+           opens the panel and its steps on arrival. */
         function onSourceClick(sourceName, position, cred, location) {
             window.sourceClickCount += 1;
             if (location === 'answer') window.answerSourceClicks += 1;
@@ -726,10 +882,10 @@
             try { window.parent.chatbotSourceClicked = true; } catch(e) {}
             showModal('This function is not available at this time.');
         }
-        /* The expanded panel holds the preamble and a NESTED "Searched N websites"
-           disclosure. The status label ("Assessing closure impact" /
-           "Evaluating sleep concerns") appears only during generation and is not
-           reproduced here. Chips carry the domain alone - no title line. */
+        /* Panel layout mirrors the generation order:
+             preamble  ->  Searched N websites (nested)  ->  three trace steps
+           Chips carry the domain alone - no title line. Step detail is open on
+           arrival in 'given' and collapsed in buried/button. */
         function buildReasonBody(shownSources) {
             const wrap = document.createElement('div');
             wrap.className = 'reason-body';
@@ -763,6 +919,32 @@
                     firstSearchedExpandMs: window.firstSearchedExpandMs
                 });
             });
+            /* Trace steps, reproduced from the generation phase. */
+            if (STEPS_IN_PANEL) {
+                const steps = document.createElement('div');
+                steps.className = 'reason-steps';
+                TASK.steps.forEach((st, k) => {
+                    const row = document.createElement('div');
+                    row.className = 'step-row';
+                    const btn = document.createElement('button');
+                    btn.className = 'step-toggle';
+                    btn.innerHTML = '<span class="chev' + (STEPS_OPEN_BY_DEFAULT ? ' open' : '') + '">&#9656;</span> '
+                                  + st.label;
+                    const detail = document.createElement('div');
+                    detail.className = 'step-detail' + (STEPS_OPEN_BY_DEFAULT ? '' : ' hidden');
+                    detail.textContent = st.detail;
+                    btn.addEventListener('click', () => {
+                        const opening = detail.classList.contains('hidden');
+                        detail.classList.toggle('hidden');
+                        btn.querySelector('.chev').classList.toggle('open', opening);
+                        registerStepToggle(k, st.label, opening, 'reasoning');
+                    });
+                    row.appendChild(btn);
+                    row.appendChild(detail);
+                    steps.appendChild(row);
+                });
+                wrap.appendChild(steps);
+            }
             return wrap;
         }
         function registerExpand() {
@@ -823,7 +1005,8 @@
                 box.appendChild(cta); box.appendChild(body);
                 return { node: box, placement: BUTTON_POSITION };
             }
-            /* given - auto-expanded; the user must collapse it to ignore it */
+            /* given - auto-expanded, and its trace steps arrive open. The user
+               must collapse the panel to ignore it. */
             const box = document.createElement('div');
             box.className = 'reason-wrap';
             const head = document.createElement('div');
@@ -971,16 +1154,30 @@
             const panel = document.createElement('pre');
             panel.id = 'debugPanel';
             panel.style.cssText = 'position:fixed;top:8px;right:8px;max-width:340px;max-height:45vh;overflow:auto;background:#111;color:#0f0;font:11px/1.4 monospace;padding:8px;border-radius:6px;z-index:2000;white-space:pre-wrap;';
-            panel.textContent = '[DEBUG] build: AI Reasoning (2-task)'
+            const wc = t => t.trim().split(/\s+/).length;
+            const detailWords = TASK.steps.reduce((n, s) => n + wc(s.detail), 0);
+            const labelWords  = TASK.steps.reduce((n, s) => n + wc(s.label), 0);
+            const traceWords  = wc(TASK.preamble) + labelWords + detailWords;
+            panel.textContent = '[DEBUG] build: AI Reasoning (2-task, 3-step trace)'
                 + '\ntask=' + TASK_ID + '  (' + TASK.topic + ')'
                 + '\ncondition=' + CONDITION + '  (' + COND.credibility + ' / ' + COND.transparency + ')'
                 + '\nparticipantId=' + PARTICIPANT_ID
                 + '\nsources=' + (CONDITION_SOURCES.map(s => s.name + '[' + s.cred + ']').join(', ') || '(none)')
                 + '\nbuttonPosition=' + BUTTON_POSITION
-                + '\ntotalGenerationMs=' + TOTAL_MS
+                + '\nstepsInPanel=' + STEPS_IN_PANEL + '  stepsOpenByDefault=' + STEPS_OPEN_BY_DEFAULT
+                + '\nsearchChevronLive=' + SEARCH_CHEVRON_LIVE
+                + '\ntraceWords=' + traceWords + ' (preamble ' + wc(TASK.preamble)
+                + ' + labels ' + labelWords + ' + details ' + detailWords + ')'
+                + '  << must MATCH the other task; 156 as shipped'
+                + '\ntotalGenerationMs=' + TOTAL_MS + '  badge="Worked for ' + Math.round(TOTAL_MS / 1000) + ' seconds"'
                 + '\nphases: dots@0 thinking@' + T_DOTS + ' preamble@' + T_THINKING
-                + ' search@' + T_PREAMBLE + ' status@' + T_SEARCH + ' end@' + TOTAL_MS
+                + ' search@' + T_PREAMBLE
+                + ' steps@' + T_SEARCH + '/' + (T_SEARCH + STEP_GAP) + '/' + (T_SEARCH + 2 * STEP_GAP)
+                + ' end@' + TOTAL_MS
                 + '\nctrlsrc=' + (IS_CONTROL ? CTRL_SRC : 'n/a')
+                + '\ntrace steps:'
+                + TASK.steps.map((s, i) => '\n  ' + (i + 1) + '. ' + s.label
+                    + ' (' + s.detail.trim().split(/\s+/).length + 'w)').join('')
                 + '\ncitation slots (A,B,C,D):'
                 + (function () {
                     const blocks = TASK.answer.split(/\n\n+/);
@@ -1034,6 +1231,15 @@
                     searchedExpanded: window.hasExpandedSearched ? 1 : 0,
                     firstSearchedExpandMs: window.firstSearchedExpandMs,
                     collapsed:        window.hasCollapsedReasoning ? 1 : 0,
+                    /* trace-step engagement */
+                    stepsOpenByDefault:  STEPS_OPEN_BY_DEFAULT ? 1 : 0,
+                    stepsOpenedGen:      window.stepOpenedGen.join(''),    // e.g. "010"
+                    stepsOpenedPanel:    window.stepOpenedPanel.join(''),
+                    genStepClicks:       window.genStepClicks,
+                    panelStepClicks:     window.panelStepClicks,
+                    anyStepOpened:       (window.genStepClicks + window.panelStepClicks) > 0 ? 1 : 0,
+                    firstStepExpandMs:   window.firstStepExpandMs,
+                    firstStepExpandWhere: window.firstStepExpandWhere,
                     verifyClicked:    0,
                     shareClicked:     window.hasClickedShare ? 1 : 0
                 });
