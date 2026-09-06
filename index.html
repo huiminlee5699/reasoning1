@@ -69,6 +69,10 @@
            AI REASONING — generation cue + reasoning display
            =================================================================== */
         .gen-block { padding: 2px 0 6px; }
+        /* what's left of the generation block once the answer lands: the
+           pinned preamble only, in buried/button */
+        .gen-block.persist { padding: 2px 0 10px; }
+        .gen-block.persist .gen-step { padding-bottom: 0; }
         .gen-step { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; color: #6b7280; padding: 4px 0; opacity: 0; transform: translateY(3px); transition: opacity .26s ease, transform .26s ease; line-height: 1.65; }
         .gen-step.on { opacity: 1; transform: none; }
         .gen-step.past { color: #9ca3af; }
@@ -201,12 +205,13 @@
            screen. A step open at the moment it is replaced is logged as
            'step_truncated' so mid-read interruptions are countable.
 
-           POST-ANSWER PANEL reproduces all three steps in every non-control
-           cell, with identical controls. Only the default state differs:
-           OPEN in given (collapsible per step, plus a panel-level Hide),
-           COLLAPSED in buried/button. So buried/button reach the trace only
-           after the answer lands, and only via two clicks — the affordance,
-           then each step.
+           POST-ANSWER PANEL reproduces the preamble, the source list and all
+           three steps in every non-control cell, with identical controls. Only
+           the default state differs: in GIVEN everything is open on arrival —
+           panel, "Searched 4 websites", and all three step paragraphs — with
+           collapse controls the participant may use but never has to. In
+           BURIED/BUTTON everything starts closed, so the trace is reachable
+           only after the answer lands and only via successive clicks.
            Set STEPS_IN_PANEL to false to keep the steps generation-only.
            ################################################################### */
         /* >>> REPLACE with the deployment URL for the AI Reasoning study <<< */
@@ -391,11 +396,24 @@
         }
         const COND = parseCondition(CONDITION);
         const IS_CONTROL = COND.credibility === 'control';
-        /* In the post-answer panel the trace steps open by default ONLY in the
-           'given' cell. Buried and Button hand over the same content behind one
-           extra click each, so IV2 varies the effort to reach the trace rather
-           than whether the trace exists. */
-        const STEPS_OPEN_BY_DEFAULT = (COND.transparency === 'given');
+        /* GIVEN opens EVERYTHING by default: the panel, the source list, and
+           all three step paragraphs. Nothing in that cell requires a click.
+           Buried and Button reach the same content behind clicks, so IV2 varies
+           the effort to reach the trace rather than whether it exists. */
+        const PANEL_FULLY_OPEN = (COND.transparency === 'given');
+        /* The preamble stays on screen from the moment it appears — it is never
+           cleared by the cues that follow. Where it LIVES once the answer lands
+           depends on the cell, so that every participant reads it exactly once:
+             GIVEN          - the open panel carries it, so the generation copy
+                              goes when the block is torn down. Continuous on
+                              screen either way; it just moves into the panel.
+             BURIED/BUTTON  - the panel is closed, so the generation copy is
+                              PINNED above the answer and stays there. The panel
+                              then omits it, to avoid showing it twice.
+           Net effect: identical readable content in all three cells; only the
+           effort to reach the sources and step details differs. */
+        const PIN_PREAMBLE      = !PANEL_FULLY_OPEN;
+        const PREAMBLE_IN_PANEL = !PIN_PREAMBLE;
         /* Sources shown in the REASONING (generation chips + expanded panel).
            Controls show no reasoning at all, so this is empty for them. */
         const CONDITION_SOURCES = IS_CONTROL ? [] : SOURCE_SETS[COND.credibility];
@@ -809,9 +827,12 @@
                 return;
             }
             await waitUntil(T_THINKING);
-            /* Step 3 - the reasoning preamble, replacing "Thinking...". */
+            /* Step 3 - the reasoning preamble, replacing "Thinking...".
+               NOT registered with line(), so nothing that follows clears it: it
+               stays pinned at the top of the block for the rest of generation,
+               and in buried/button it outlives the block entirely. */
             clearLines();
-            line('<span>' + TASK.preamble + '</span>');
+            const preambleRow = addStep('<span>' + TASK.preamble + '</span>', 'gen-preamble');
             trackEvent({ type: 'gen_step', step: 'preamble' });
             await waitUntil(T_PREAMBLE);
             /* Step 4 - searching cue. Sources CYCLE through one shared slot:
@@ -905,8 +926,19 @@
                 trackEvent({ type: 'gen_step', step: 'trace_step_' + (k + 1), stepLabel: st.label });
             }
             await waitUntil(TOTAL_MS);
-            retireStep(false);   // logs only; the whole block goes next anyway
-            genBlock.remove();
+            retireStep(false);
+            if (PIN_PREAMBLE) {
+                /* Buried/button: strip every cue except the preamble, which
+                   stays above the answer for the rest of the trial. */
+                Array.prototype.slice.call(genBlock.children).forEach(c => {
+                    if (c !== preambleRow) c.remove();
+                });
+                preambleRow.classList.remove('past');
+                genBlock.classList.add('persist');
+            } else {
+                /* Given: the panel below carries the preamble, open on arrival. */
+                genBlock.remove();
+            }
         }
         /* ==================== REASONING DISPLAY (IV2) ====================
            The expanded body reproduces what the collapsed panel contained
@@ -945,15 +977,20 @@
         function buildReasonBody(shownSources) {
             const wrap = document.createElement('div');
             wrap.className = 'reason-body';
-            const p1 = document.createElement('p');
-            p1.textContent = TASK.preamble;
-            wrap.appendChild(p1);
+            /* Omitted in buried/button, where the preamble is pinned above the
+               answer instead — every cell shows it exactly once. */
+            if (PREAMBLE_IN_PANEL) {
+                const p1 = document.createElement('p');
+                p1.textContent = TASK.preamble;
+                wrap.appendChild(p1);
+            }
             const toggle = document.createElement('button');
             toggle.className = 'searched-toggle';
-            toggle.innerHTML = '<span class="chev">&#9656;</span> Searched ' + shownSources.length + ' websites';
+            toggle.innerHTML = '<span class="chev' + (PANEL_FULLY_OPEN ? ' open' : '') + '">&#9656;</span> Searched '
+                             + shownSources.length + ' websites';
             wrap.appendChild(toggle);
             const list = document.createElement('div');
-            list.className = 'reason-sources hidden';
+            list.className = 'reason-sources' + (PANEL_FULLY_OPEN ? '' : ' hidden');
             shownSources.forEach((s, idx) => {
                 const a = document.createElement('div');
                 a.className = 'src-link';
@@ -984,10 +1021,10 @@
                     row.className = 'step-row';
                     const btn = document.createElement('button');
                     btn.className = 'step-toggle';
-                    btn.innerHTML = '<span class="chev' + (STEPS_OPEN_BY_DEFAULT ? ' open' : '') + '">&#9656;</span> '
+                    btn.innerHTML = '<span class="chev' + (PANEL_FULLY_OPEN ? ' open' : '') + '">&#9656;</span> '
                                   + st.label;
                     const detail = document.createElement('div');
-                    detail.className = 'step-detail' + (STEPS_OPEN_BY_DEFAULT ? '' : ' hidden');
+                    detail.className = 'step-detail' + (PANEL_FULLY_OPEN ? '' : ' hidden');
                     detail.textContent = st.detail;
                     btn.addEventListener('click', () => {
                         const opening = detail.classList.contains('hidden');
@@ -1049,7 +1086,7 @@
                 box.className = 'reason-wrap' + (BUTTON_POSITION === 'below' ? ' below' : '');
                 const cta = document.createElement('button');
                 cta.className = 'cta-button';
-                cta.innerHTML = '<span class="chev">&#9656;</span> See how I got your answer';
+                cta.innerHTML = '<span class="chev">&#9656;</span> Expand thinking process';
                 const body = buildReasonBody(shownSources);
                 body.classList.add('hidden');
                 cta.addEventListener('click', () => {
@@ -1220,7 +1257,10 @@
                 + '\nparticipantId=' + PARTICIPANT_ID
                 + '\nsources=' + (CONDITION_SOURCES.map(s => s.name + '[' + s.cred + ']').join(', ') || '(none)')
                 + '\nbuttonPosition=' + BUTTON_POSITION
-                + '\nstepsInPanel=' + STEPS_IN_PANEL + '  stepsOpenByDefault=' + STEPS_OPEN_BY_DEFAULT
+                + '\nstepsInPanel=' + STEPS_IN_PANEL + '  panelFullyOpen=' + PANEL_FULLY_OPEN
+                + ' (panel + sources + all 3 step paragraphs)'
+                + '\npreamble: ' + (PIN_PREAMBLE ? 'PINNED above the answer, omitted from panel'
+                                                 : 'in the open panel, generation copy removed at 26s')
                 + '\ngenStepMode=' + (COND.transparency === 'given' ? 'ACCUMULATE (all 3 stay)' : 'CYCLE (one at a time)')
                 + '\nsearchChevronLive=' + SEARCH_CHEVRON_LIVE
                 + '\ntraceWords=' + traceWords + ' (preamble ' + wc(TASK.preamble)
@@ -1289,7 +1329,7 @@
                     firstSearchedExpandMs: window.firstSearchedExpandMs,
                     collapsed:        window.hasCollapsedReasoning ? 1 : 0,
                     /* trace-step engagement */
-                    stepsOpenByDefault:  STEPS_OPEN_BY_DEFAULT ? 1 : 0,
+                    panelFullyOpen:      PANEL_FULLY_OPEN ? 1 : 0,
                     stepsOpenedGen:      window.stepOpenedGen.join(''),    // e.g. "010"
                     stepsOpenedPanel:    window.stepOpenedPanel.join(''),
                     genStepClicks:       window.genStepClicks,
