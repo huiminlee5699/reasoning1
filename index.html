@@ -32,8 +32,7 @@
         .searching-cue { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #6b7280; padding: 8px 0; }
         .answer-line { display: block; line-height: 1.7; color: #374151; margin-bottom: 4px; }
         .answer-line span { display: inline; }
-        .source-bubble { display: inline-flex; align-items: center; gap: 6px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 20px; padding: 3px 10px; font-size: 12px; color: #374151; vertical-align: middle; transition: background-color 0.2s, border-color 0.2s; cursor: pointer; white-space: nowrap; }
-        .source-bubble:hover { background-color: #e5e7eb; border-color: #d1d5db; }
+        .source-bubble { display: inline-flex; align-items: center; gap: 6px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 20px; padding: 3px 10px; font-size: 12px; color: #374151; vertical-align: middle; transition: background-color 0.2s, border-color 0.2s; white-space: nowrap; }
         .action-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
         .icon-btn { background: none; border: none; cursor: pointer; padding: 5px; border-radius: 6px; display: flex; align-items: center; justify-content: center; position: relative; }
         .icon-btn:hover { background-color: #e5e7eb; }
@@ -117,9 +116,12 @@
         .step-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 2px 0; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 500; color: #6b7280; text-align: left; }
         .step-toggle:hover { color: #374151; }
         .step-detail { margin: 6px 0 0 6px; padding-left: 14px; border-left: 2px solid #e5e7eb; color: #6b7280; font-size: 14.5px; line-height: 1.75; }
-        /* inline citation chip inside the answer body */
-        .cite-chip { display: inline-flex; align-items: center; gap: 5px; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 20px; padding: 1px 9px; font-size: 11.5px; color: #6b7280; margin-left: 6px; vertical-align: baseline; cursor: pointer; white-space: nowrap; transition: background-color .2s, border-color .2s; }
-        .cite-chip:hover { background-color: #e5e7eb; border-color: #d1d5db; color: #374151; }
+        /* NOTE: the .cite-chip rule that styled in-answer citations has been
+           REMOVED. Sources now live ONLY inside the reasoning display, so the
+           answer body carries no clickable elements of any kind. The
+           .source-bubble rule above survives because the generation chips
+           still use it — but those are display-only now, so its cursor and
+           :hover affordances have been dropped. */
     </style>
 </head>
 <body>
@@ -181,7 +183,36 @@
              .../aireasoning_stimulus.html?participantId=${e://Field/ResponseID}&task=A&condition=mixed_button
 
            ---------------------------------------------------------------
-           REASONING TRACE (revised)
+           *** REVISION: SOURCES APPEAR IN THE REASONING ONLY ***
+           The answer body now carries NO citations, chips, links or source
+           names of any kind. It is plain prose, byte-identical across all 11
+           cells within a task. Every source a participant can see or click
+           lives inside the reasoning:
+             - the cycling chips during "Searching the web..."  (DISPLAY ONLY,
+               not clickable — they pass through one shared slot)
+             - the "Searched 4 websites" list inside the post-answer panel
+               (the ONLY clickable source affordance in the whole stimulus)
+
+           Consequences for the design and the data:
+             * IV1 (source credibility) is now carried entirely by the
+               reasoning. A participant who never opens the reasoning never
+               sees a source at all, which is the intended contrast.
+             * A source click is, by construction, an act of engagement with
+               the REASONING. There is no longer an 'answer' click location,
+               so every source_click row is location = 'reasoning'.
+             * The two controls (control_pure, control_thinking) render no
+               reasoning, so they now show zero sources anywhere. They are
+               pure no-source baselines.
+           Removed with this revision: CITE_SLOTS, planCitations(),
+           makeCiteChip(), splitSentences(), isVerdictBlock(),
+           isBottomLineBlock(), the .cite-chip CSS, the ANSWER_SOURCES set and
+           the &ctrlsrc= URL override.
+           Apps Script columns retired alongside them: answerSourceOrder,
+           citePositions, clickedInAnswer, clickedInReasoning,
+           answerSourceClicks, reasoningSourceClicks, sourceLocation.
+
+           ---------------------------------------------------------------
+           REASONING TRACE
            The single status label has been replaced by THREE labelled trace
            steps, each carrying a short first-person paragraph behind its own
            chevron. Readable trace text (preamble + 3 labels + 3 details) is
@@ -283,12 +314,7 @@
            identical answers are rated more thoughtful after longer waits.
            Phase boundaries are absolute offsets from generation start and
            always end at TOTAL_MS. "Worked for 26 seconds" is derived from
-           TOTAL_MS, so changing one number keeps the label honest.
-
-           Extended from 20s to 26s so the three trace steps get ~3s each —
-           enough to read a label and reach for its chevron. The extra 6s is
-           applied to every cell including the two controls, so latency stays
-           constant across conditions. */
+           TOTAL_MS, so changing one number keeps the label honest. */
         const TOTAL_MS   = 26000;   // 26s, matching the "Worked for 26 seconds" badge
         const T_DOTS     = 2000;    // typing dots -> Thinking...
         const T_THINKING = 5000;    // Thinking... -> preamble
@@ -300,8 +326,8 @@
         const STEP_COUNT = 3;
         const STEP_GAP   = Math.floor((TOTAL_MS - T_SEARCH) / STEP_COUNT);   // 3000ms
         /* ========================= SOURCE SETS ==========================
-           Four chips per condition, all shown together.
-           Mixed = the first two credible + the first two non-credible, then
+           Four chips per condition.
+           Mixed = a fresh random two credible + two non-credible, then
            shuffled, so a mixed set is never ordered credible-then-dubious. */
         const TASKS = {
             A: {
@@ -328,10 +354,10 @@
                     }
                 ],
                 credible: [
-                    { name: 'www.consumerfinance.gov', title: 'Does closing a credit card hurt my credit score?' },
-                    { name: 'www.experian.com',        title: 'How closing a credit card affects your credit' },
-                    { name: 'www.myfico.com',          title: 'Credit utilization and your FICO Score' },
-                    { name: 'www.fhfa.gov',            title: 'Credit score models used in mortgage lending' }
+                    { name: '[www.consumerfinance.gov](https://www.consumerfinance.gov)', title: 'Does closing a credit card hurt my credit score?' },
+                    { name: '[www.experian.com](https://www.experian.com)',        title: 'How closing a credit card affects your credit' },
+                    { name: '[www.myfico.com](https://www.myfico.com)',          title: 'Credit utilization and your FICO Score' },
+                    { name: '[www.fhfa.gov](https://www.fhfa.gov)',            title: 'Credit score models used in mortgage lending' }
                 ],
                 noncredible: [
                     { name: 'reddit.com',            title: 'r/CreditCards - Closed my old cards before a mortgage' },
@@ -364,10 +390,10 @@
                     }
                 ],
                 credible: [
-                    { name: 'www.nccih.nih.gov',  title: 'Melatonin: what you need to know' },
-                    { name: 'www.acponline.org',  title: 'Management of chronic insomnia disorder in adults' },
+                    { name: '[www.nccih.nih.gov](https://www.nccih.nih.gov)',  title: 'Melatonin: what you need to know' },
+                    { name: '[www.acponline.org](https://www.acponline.org)',  title: 'Management of chronic insomnia disorder in adults' },
                     { name: 'aasm.org',           title: 'Clinical practice guideline for circadian rhythm sleep-wake disorders' },
-                    { name: 'www.mayoclinic.org', title: 'Melatonin: dosage, side effects and safety' }
+                    { name: '[www.mayoclinic.org](https://www.mayoclinic.org)', title: 'Melatonin: dosage, side effects and safety' }
                 ],
                 noncredible: [
                     { name: 'reddit.com',              title: 'r/sleep - 10mg melatonin every night, my experience' },
@@ -422,32 +448,24 @@
            cleared by the cues that follow. Where it LIVES once the answer lands
            depends on the cell, so that every participant reads it exactly once:
              GIVEN          - the open panel carries it, so the generation copy
-                              goes when the block is torn down. Continuous on
-                              screen either way; it just moves into the panel.
+                              goes when the block is torn down.
              BURIED/BUTTON  - the panel is closed, so the generation copy is
                               PINNED above the answer and stays there. The panel
-                              then omits it, to avoid showing it twice.
-           Net effect: identical readable content in all three cells; only the
-           effort to reach the sources and step details differs. */
+                              then omits it, to avoid showing it twice. */
         const PIN_PREAMBLE      = !PANEL_FULLY_OPEN;
         const PREAMBLE_IN_PANEL = !PIN_PREAMBLE;
-        /* Sources shown in the REASONING (generation chips + expanded panel).
-           Controls show no reasoning at all, so this is empty for them. */
+        /* The ONLY source set in the stimulus. It is shown in the reasoning —
+           as the cycling generation chips and as the clickable list inside the
+           post-answer panel — and nowhere else. Controls render no reasoning,
+           so they see no sources at all.
+           (The former ANSWER_SOURCES set and the &ctrlsrc= override that chose
+           which sources the controls would cite inside the answer are gone: the
+           answer cites nothing in any cell.) */
         const CONDITION_SOURCES = IS_CONTROL ? [] : SOURCE_SETS[COND.credibility];
-        /* Sources cited INSIDE THE ANSWER. Controls get these too, so the answer
-           body is structurally identical in all 11 cells and IV2 isolates the
-           reasoning display rather than also removing in-answer citations.
-           Which set the controls cite defaults to credible; override with
-           &ctrlsrc=credible|mixed|noncredible if you want to match a different
-           reference cell. */
-        const CTRL_SRC = urlParams.get('ctrlsrc') || 'credible';
-        const ANSWER_SOURCES = IS_CONTROL
-            ? (SOURCE_SETS[CTRL_SRC] || SOURCE_SETS.credible)
-            : CONDITION_SOURCES;
-        const ANSWER_SRC_IS_MIXED = IS_CONTROL ? (CTRL_SRC === 'mixed') : (COND.credibility === 'mixed');
         /* ==================== SCRIPTED RESPONSE =========================
-           No source bubbles appear in the answer. Sources live only in the
-           reasoning, so IV1 moves one thing and source clicks measure
+           No sources of any kind appear in the answer: no bubbles, no citation
+           chips, no domain names in the prose. Sources live only in the
+           reasoning, so IV1 moves one thing and every source click measures
            engagement with the reasoning rather than with the answer.
            The answer text is byte-identical in all 11 cells within a task. */
         const SCRIPTED_RESPONSES = [
@@ -488,18 +506,14 @@
         window.hasCollapsedReasoning       = false;
         window.scriptedTopic               = null;
         window.clickedSourceLabel          = '';
-        window.clickedSourceLocation       = '';   // 'answer' | 'reasoning', first click
         window.clickedSourceCred           = '';   // 1 authoritative / 0 dubious, first click
         window.summarySent                 = false;// acted_summary writes exactly once
         window.sourceClickCount            = 0;   // counts repeats too, even though the UI locks
+        window.firstSourceClickMs          = null;
         window.firstExpandMs               = null;
         window.expandedDuringGeneration    = null; // 1 = opened before the answer finished
         window.shownSourceOrder            = '';
         window.credPattern                 = '';   // e.g. "1010" for a mixed row
-        window.answerSourceOrder           = '';   // sources cited inside the answer
-        window.citePositions               = '';   // e.g. "p1s0|p2s1|p3s0|p4s2"
-        window.answerSourceClicks          = 0;
-        window.reasoningSourceClicks       = 0;
         window.hasExpandedSearched         = false;
         window.firstSearchedExpandMs       = null;
         window.answerDoneMs                = null;
@@ -520,7 +534,9 @@
         window.firstStepExpandWhere = '';         // 'generation' | 'reasoning'
         window.firstStepCloseMs     = null;
         window.stepsInterrupted     = 0;          // open when taken off screen
-        /* --- source-click counters -------------------------------------- */
+        /* --- source-click counters --------------------------------------
+           All source clicks now originate in the reasoning panel, so there is
+           no 'answer' counterpart to these. */
         window.credibleClicks       = 0;          // clicks on cred = 1 domains
         window.noncredibleClicks    = 0;          // clicks on cred = 0 domains
         try {
@@ -636,68 +652,13 @@
                 }
             }
         }
-        /* ================= IN-ANSWER CITATION PLACEMENT =================
-           One chip per source, dropped at a fixed sentence boundary.
-           Eligible blocks exclude the opening verdict line (which is the answer's
-           first sentence) and the closing "Bottom line:" block. Both task answers
-           have exactly four body paragraphs between those two, so with four
-           sources each paragraph receives exactly one chip - the density is
-           identical across tasks and cells, only the position moves. */
-        function isVerdictBlock(block) { return /^\*\*[^*]+\*\*$/.test(block.trim()); }
-        function isBottomLineBlock(block) { return /^\*\*Bottom line/i.test(block.trim()); }
-        function splitSentences(s) {
-            const parts = s.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g);
-            return parts ? parts.map(p => p.replace(/\s+$/, '')).filter(Boolean) : [s];
-        }
-        /* Citation slots are FIXED per task, not random. Each entry is
-           [blockIndex, sentenceIndex] and its array position is which source
-           lands there: slot 0 = Source A = the first domain shown during
-           generation, slot 1 = Source B, and so on. Block 0 is the verdict line
-           and the last block is "Bottom line:", so neither is ever a target.
-           Sentence indices are zero-based within the paragraph. */
-        const CITE_SLOTS = {
-            A: [ [1, 2],   // A - after "...simpler, lower-risk profile."
-                 [2, 2],   // B - after "...drives that part of your score."
-                 [3, 1],   // C - after "...count toward your credit age."
-                 [4, 1] ], // D - after "...a cleaner, simpler file."
-            B: [ [1, 1],   // A - after "...the falling-asleep part."
-                 [2, 0],   // B - after "...products are formulated at."
-                 [3, 2],   // C - after "...available without a prescription."
-                 [4, 1] ]  // D - after "...usually holds on its own."
-        };
-        function planCitations(text, sources) {
-            const plan = {};
-            if (!sources || !sources.length) return plan;
-            const slots  = CITE_SLOTS[TASK_ID] || [];
-            const blocks = text.split(/\n\n+/);
-            sources.forEach((s, k) => {
-                const slot = slots[k];
-                if (!slot) return;
-                const [blockIdx, sentIdx] = slot;
-                const t = (blocks[blockIdx] || '').trim();
-                /* Guard: if the answer text is edited later and a slot no longer
-                   resolves, drop that chip rather than render it in the wrong
-                   place or crash. Check the debug panel after any text edit. */
-                if (!t || isVerdictBlock(t) || isBottomLineBlock(t)) return;
-                const sents = splitSentences(t.split('\n').join(' '));
-                if (sentIdx >= sents.length) return;
-                if (!plan[blockIdx]) plan[blockIdx] = [];
-                /* position = which of the four slots this domain occupies, so
-                   an answer-chip click is comparable with a reasoning click
-                   instead of always logging 0. */
-                plan[blockIdx].push({ source: s, afterSentence: sentIdx, position: k + 1 });
-            });
-            return plan;
-        }
-        function makeCiteChip(s, position) {
-            const chip = document.createElement('span');
-            chip.className = 'cite-chip';
-            chip.innerHTML = '&#128279; ' + s.name;
-            chip.addEventListener('click', () => onSourceClick(s.name, position || 0, s.cred, 'answer'));
-            return chip;
-        }
-        async function streamFormattedAnswer(container, text, citePlan) {
-            citePlan = citePlan || {};
+        /* ===================== ANSWER RENDERING =========================
+           Plain prose only. The citation planner (planCitations), the fixed
+           slot table (CITE_SLOTS), the sentence splitter (splitSentences) and
+           the chip builder (makeCiteChip) that used to live here have all been
+           REMOVED along with the in-answer sources, so the answer streams
+           paragraph by paragraph with nothing clickable in it. */
+        async function streamFormattedAnswer(container, text) {
             const blocks = text.split(/\n\n+/);
             for (let b = 0; b < blocks.length; b++) {
                 const block = blocks[b].trim();
@@ -734,21 +695,7 @@
                     const p = document.createElement('p');
                     p.style.cssText = 'margin-bottom: 10px; line-height: 1.7;';
                     container.appendChild(p);
-                    const cites = citePlan[b];
-                    if (!cites || !cites.length) {
-                        await streamMarkdownTextInto(p, lines.join(' '));
-                    } else {
-                        /* Stream sentence by sentence so a chip can be dropped in
-                           at the planned boundary as the text arrives, rather than
-                           appearing after the paragraph finishes. */
-                        const sents = splitSentences(lines.join(' '));
-                        for (let si = 0; si < sents.length; si++) {
-                            await streamMarkdownTextInto(p, (si ? ' ' : '') + sents[si]);
-                            cites.filter(c => c.afterSentence === si)
-                                 .forEach(c => p.appendChild(makeCiteChip(c.source, c.position)));
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
-                        }
-                    }
+                    await streamMarkdownTextInto(p, lines.join(' '));
                 }
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
@@ -820,12 +767,7 @@
              dots -> Thinking... -> preamble -> Searching the web... + chips
              -> three trace steps -> collapses into "Worked for 26 seconds"
            Chips CYCLE through one shared slot so exposure time per domain is
-           identical across sets.
-           The trace steps arrive at 17s, 20s and 23s. In GIVEN they accumulate
-           (earlier ones greyed but present and clickable); in BURIED/BUTTON
-           each replaces the last, so only one is ever on screen. Either way a
-           label is clickable while it is visible, and a step still open when it
-           is removed is logged as 'step_interrupted'. */
+           identical across sets, and they are DISPLAY ONLY. */
         async function runGenerationPhase(messageContent, shownSources) {
             const genBlock = document.createElement('div');
             genBlock.className = 'gen-block';
@@ -873,9 +815,7 @@
             }
             await waitUntil(T_THINKING);
             /* Step 3 - the reasoning preamble, replacing "Thinking...".
-               NOT registered with line(), so nothing that follows clears it: it
-               stays pinned at the top of the block for the rest of generation,
-               and in buried/button it outlives the block entirely. */
+               NOT registered with line(), so nothing that follows clears it. */
             clearLines();
             const preambleRow = addStep('<span>' + TASK.preamble + '</span>', 'gen-preamble');
             trackEvent({ type: 'gen_step', step: 'preamble' });
@@ -885,8 +825,9 @@
                only ever one chip is on screen. Each owns an equal window
                [T_PREAMBLE + i*gap, T_PREAMBLE + (i+1)*gap), which keeps exposure
                time identical across chips and across cells.
-               The chevron here is DECORATIVE - the source list is reachable only
-               from the post-answer panel, so all source-click timing is measured
+               These chips are DISPLAY ONLY - not clickable, and the chevron is
+               decorative. The source list is reachable only from the
+               post-answer panel, so all source-click timing is measured
                against a single affordance. */
             clearLines();
             const searchChev = SEARCH_CHEVRON_LIVE ? '' : '<span class="chev-static">&#9656;</span>';
@@ -999,29 +940,30 @@
            therefore manipulates the EFFORT required to reach the trace, not
            whether the trace exists: every non-control cell can reach the same
            156 words, but Buried hides the handle, Button labels it, and Given
-           opens the panel and its steps on arrival. */
-        function onSourceClick(sourceName, position, cred, location) {
+           opens the panel and its steps on arrival.
+           This panel is also the ONLY place in the stimulus where a source can
+           be clicked. */
+        function onSourceClick(sourceName, position, cred) {
             window.sourceClickCount += 1;
-            if (location === 'answer') window.answerSourceClicks += 1;
-            else                       window.reasoningSourceClicks += 1;
+            if (window.firstSourceClickMs === null) window.firstSourceClickMs = sinceLoad();
             if (cred === 1) window.credibleClicks += 1;
             else            window.noncredibleClicks += 1;
             trackEvent({
                 type: 'source_click',
                 sourceLabel: sourceName,
                 sourceCred: cred,          // 1 = authoritative, 0 = dubious
-                location: location,        // 'answer' | 'reasoning'
+                location: 'reasoning',     // the only location that exists now
                 position: position,        // 1-4, logged to 'events' only
-                clickIndex: window.sourceClickCount   // >1 is a repeat
+                clickIndex: window.sourceClickCount,   // >1 is a repeat
+                firstSourceClickMs: window.firstSourceClickMs
             });
             if (window.hasClickedSource) {
                 showModal(MSG_LINK);
                 return;
             }
-            window.hasClickedSource      = true;
-            window.clickedSourceLabel    = sourceName;
-            window.clickedSourceLocation = location;
-            window.clickedSourceCred     = cred;
+            window.hasClickedSource   = true;
+            window.clickedSourceLabel = sourceName;
+            window.clickedSourceCred  = cred;
             try { window.parent.chatbotSourceClicked = true; } catch(e) {}
             showModal(MSG_LINK);
         }
@@ -1050,7 +992,7 @@
                 const a = document.createElement('div');
                 a.className = 'src-link';
                 a.innerHTML = '&#128279; <span>' + s.name + '</span>';
-                a.addEventListener('click', () => onSourceClick(s.name, idx + 1, s.cred, 'reasoning'));
+                a.addEventListener('click', () => onSourceClick(s.name, idx + 1, s.cred));
                 list.appendChild(a);
             });
             wrap.appendChild(list);
@@ -1181,13 +1123,6 @@
             window.shownSourceOrder = shownSources.map(s => s.name).join('|');
             /* e.g. "1010" - which slots held authoritative domains, left to right */
             window.credPattern = shownSources.map(s => s.cred).join('');
-            /* In-answer citations. Controls have no reasoning chips but still cite,
-               so this set is drawn independently of shownSources. */
-            const answerSources = shuffleForDisplay(ANSWER_SOURCES, ANSWER_SRC_IS_MIXED);
-            const citePlan = planCitations(responseObj.answer, answerSources);
-            window.answerSourceOrder = answerSources.map(s => s.name).join('|');
-            window.citePositions = Object.keys(citePlan).sort((a, b) => a - b)
-                .map(k => citePlan[k].map(c => 'p' + k + 's' + c.afterSentence).join(',')).join('|');
             await runGenerationPhase(messageContent, shownSources);
             /* Reasoning display lands FIRST, then the answer streams beneath it. */
             let display = null;
@@ -1201,7 +1136,7 @@
             const actionRow = buildActionRow(responseObj.answer);
             actionRow.style.visibility = 'hidden';
             messageContent.appendChild(actionRow);
-            await streamFormattedAnswer(answerContainer, responseObj.answer, citePlan);
+            await streamFormattedAnswer(answerContainer, responseObj.answer);
             window.answerDoneMs = sinceLoad();
             actionRow.style.visibility = 'visible';
             chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -1306,11 +1241,21 @@
             const detailWords = TASK.steps.reduce((n, s) => n + wc(s.detail), 0);
             const labelWords  = TASK.steps.reduce((n, s) => n + wc(s.label), 0);
             const traceWords  = wc(TASK.preamble) + labelWords + detailWords;
-            panel.textContent = '[DEBUG] build: AI Reasoning (2-task, 3-step trace)'
+            /* Leak check: the answer text must contain no domain name from
+               either source list. Prints PASS/FAIL so a future edit that
+               reintroduces a source into the prose is caught immediately. */
+            const allDomains = TASK.credible.concat(TASK.noncredible).map(function (s) {
+                return s.name.replace(/^\[/, '').replace(/\].*$/, '');
+            });
+            const leaked = allDomains.filter(function (d) { return TASK.answer.indexOf(d) !== -1; });
+            panel.textContent = '[DEBUG] build: AI Reasoning (2-task, 3-step trace, NO answer sources)'
                 + '\ntask=' + TASK_ID + '  (' + TASK.topic + ')'
                 + '\ncondition=' + CONDITION + '  (' + COND.credibility + ' / ' + COND.transparency + ')'
                 + '\nparticipantId=' + PARTICIPANT_ID
                 + '\nsources=' + (CONDITION_SOURCES.map(s => s.name + '[' + s.cred + ']').join(', ') || '(none)')
+                + '\nsourcesInAnswer=NONE (reasoning only)'
+                + '\nanswerLeakCheck=' + (leaked.length ? 'FAIL -> ' + leaked.join(', ') : 'PASS')
+                + '\nclickableSources=' + (IS_CONTROL ? 'none (control)' : 'panel "Searched N websites" list only')
                 + '\nbuttonPosition=' + BUTTON_POSITION
                 + '\nstepsInPanel=' + STEPS_IN_PANEL + '  panelFullyOpen=' + PANEL_FULLY_OPEN
                 + ' (panel + sources + all 3 step paragraphs)'
@@ -1326,21 +1271,9 @@
                 + ' search@' + T_PREAMBLE
                 + ' steps@' + T_SEARCH + '/' + (T_SEARCH + STEP_GAP) + '/' + (T_SEARCH + 2 * STEP_GAP)
                 + ' end@' + TOTAL_MS
-                + '\nctrlsrc=' + (IS_CONTROL ? CTRL_SRC : 'n/a')
                 + '\ntrace steps:'
                 + TASK.steps.map((s, i) => '\n  ' + (i + 1) + '. ' + s.label
                     + ' (' + s.detail.trim().split(/\s+/).length + 'w)').join('')
-                + '\ncitation slots (A,B,C,D):'
-                + (function () {
-                    const blocks = TASK.answer.split(/\n\n+/);
-                    return (CITE_SLOTS[TASK_ID] || []).map(function (sl, i) {
-                        const t = (blocks[sl[0]] || '').trim().split('\n').join(' ');
-                        const sents = splitSentences(t);
-                        const s = sents[sl[1]];
-                        const tail = s ? s.trim().slice(-40) : '!! UNRESOLVED';
-                        return '\n  ' + 'ABCD'[i] + ' block' + sl[0] + ' sent' + sl[1] + ' -> "..' + tail + '"';
-                    }).join('');
-                })()
                 + '\nprompt = "' + TASK.question + '"';
             document.body.appendChild(panel);
         }
@@ -1366,17 +1299,23 @@
                                 the participant clicks Next. Normal path.
              'pagehide'       - the page is being unloaded without that
                                 message: they closed the tab, timed out, or
-                                the stimulus is being run standalone (no
-                                parent frame exists to send anything).
+                                the stimulus is being run standalone.
            The guard means whichever fires first wins and the second is a
            no-op, so Next-then-unload does not produce two rows.
 
            exitMs is the clock reading at that moment; dwell is derived in
-           Apps Script as exitMs - answerDoneMs, i.e. how long they sat with
-           the finished answer before moving on. Blank if the answer never
-           finished. NOTE: visibilitychange is deliberately NOT a trigger —
-           it fires on a mid-task tab switch, which would close the row early
-           and swallow everything the participant did afterwards. */
+           Apps Script as exitMs - answerDoneMs. NOTE: visibilitychange is
+           deliberately NOT a trigger — it fires on a mid-task tab switch,
+           which would close the row early.
+
+           *** REVISION *** The answer-location source fields are GONE:
+           answerSourceOrder, citePositions, clickedInAnswer,
+           clickedInReasoning, answerSourceClicks, reasoningSourceClicks and
+           sourceLocation. Every click is a reasoning click now, so
+           sourceClicks alone carries what those columns used to split, and
+           firstSourceClickMs has been ADDED so latency-to-first-click is
+           available on the summary row. Update the Apps Script header to
+           match. */
         function sendSummary(trigger, useBeacon) {
             if (window.summarySent) return;
             window.summarySent = true;
@@ -1391,18 +1330,13 @@
                     transparency:     COND.transparency,
                     sourceOrder:      window.shownSourceOrder,
                     credPattern:      window.credPattern,
-                    answerSourceOrder: window.answerSourceOrder,
-                    citePositions:    window.citePositions,
+                    /* source engagement — reasoning panel only */
                     sourceClicked:    window.hasClickedSource ? 1 : 0,
-                    clickedInAnswer:    window.answerSourceClicks    > 0 ? 1 : 0,
-                    clickedInReasoning: window.reasoningSourceClicks > 0 ? 1 : 0,
                     sourceClicks:     window.sourceClickCount,
-                    answerSourceClicks:    window.answerSourceClicks,
-                    reasoningSourceClicks: window.reasoningSourceClicks,
-                    credibleClicks:        window.credibleClicks,
-                    noncredibleClicks:     window.noncredibleClicks,
+                    firstSourceClickMs: window.firstSourceClickMs,
+                    credibleClicks:   window.credibleClicks,
+                    noncredibleClicks: window.noncredibleClicks,
                     sourceLabel:      window.clickedSourceLabel || '',
-                    sourceLocation:   window.clickedSourceLocation || '',
                     sourceCred:       window.clickedSourceCred,
                     expanded:         window.hasExpandedReasoning ? 1 : 0,
                     firstExpandMs:    window.firstExpandMs,
@@ -1425,6 +1359,7 @@
                     firstStepExpandMs:   window.firstStepExpandMs,
                     firstStepExpandWhere: window.firstStepExpandWhere,
                     firstStepCloseMs:    window.firstStepCloseMs,
+                    stepsInterrupted:    window.stepsInterrupted,
                     stepsCycled:         (COND.transparency === 'given') ? 0 : 1,
                     shareClicked:     window.hasClickedShare ? 1 : 0
             }, useBeacon);
