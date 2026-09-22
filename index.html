@@ -353,11 +353,16 @@
                         detail: "Dormant accounts move the score less than active ones, so I'm checking how long any adjustment takes to settle and whether eight months clears it comfortably before the lender pulls."
                     }
                 ],
+                /* name = the bare domain, exactly as it should READ on the chip.
+                   Never markdown link syntax: the chip is built with innerHTML,
+                   not a markdown renderer, so "[label](url)" would print both
+                   the label and the raw URL. Keep every entry a plain string so
+                   chip width and readability are matched across the two sets. */
                 credible: [
-                    { name: '[www.consumerfinance.gov](https://www.consumerfinance.gov)', title: 'Does closing a credit card hurt my credit score?' },
-                    { name: '[www.experian.com](https://www.experian.com)',        title: 'How closing a credit card affects your credit' },
-                    { name: '[www.myfico.com](https://www.myfico.com)',          title: 'Credit utilization and your FICO Score' },
-                    { name: '[www.fhfa.gov](https://www.fhfa.gov)',            title: 'Credit score models used in mortgage lending' }
+                    { name: 'consumerfinance.gov', title: 'Does closing a credit card hurt my credit score?' },
+                    { name: 'experian.com',        title: 'How closing a credit card affects your credit' },
+                    { name: 'myfico.com',          title: 'Credit utilization and your FICO Score' },
+                    { name: 'fhfa.gov',            title: 'Credit score models used in mortgage lending' }
                 ],
                 noncredible: [
                     { name: 'reddit.com',            title: 'r/CreditCards - Closed my old cards before a mortgage' },
@@ -389,11 +394,12 @@
                         detail: "Taking it at bedtime puts the signal where the sleep is wanted, so I'm checking how many nights that typically takes to hold and whether nightly use raises any dependence or suppression issues."
                     }
                 ],
+                /* Bare domains only — see the note on Task A's credible list. */
                 credible: [
-                    { name: '[www.nccih.nih.gov](https://www.nccih.nih.gov)',  title: 'Melatonin: what you need to know' },
-                    { name: '[www.acponline.org](https://www.acponline.org)',  title: 'Management of chronic insomnia disorder in adults' },
-                    { name: 'aasm.org',           title: 'Clinical practice guideline for circadian rhythm sleep-wake disorders' },
-                    { name: '[www.mayoclinic.org](https://www.mayoclinic.org)', title: 'Melatonin: dosage, side effects and safety' }
+                    { name: 'nccih.nih.gov',  title: 'Melatonin: what you need to know' },
+                    { name: 'acponline.org',  title: 'Management of chronic insomnia disorder in adults' },
+                    { name: 'aasm.org',       title: 'Clinical practice guideline for circadian rhythm sleep-wake disorders' },
+                    { name: 'mayoclinic.org', title: 'Melatonin: dosage, side effects and safety' }
                 ],
                 noncredible: [
                     { name: 'reddit.com',              title: 'r/sleep - 10mg melatonin every night, my experience' },
