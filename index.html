@@ -216,7 +216,7 @@
            The single status label has been replaced by THREE labelled trace
            steps, each carrying a short first-person paragraph behind its own
            chevron. Readable trace text (preamble + 3 labels + 3 details) is
-           156 words in BOTH tasks, so content volume is matched across tasks
+           200 words in BOTH tasks, so content volume is matched across tasks
            as well as across cells. The debug panel prints the live count —
            re-check it after any edit to the trace wording.
 
@@ -395,24 +395,30 @@
             A: {
                 topic: 'taskA_creditcards',
                 question: "I have two old credit cards I don't use anymore. Card 1 is my oldest, opened in 2009, $2,000 limit, no annual fee. Card 2 is from 2019, $12,000 limit, $95 annual fee. I pay my main card in full every month. I'm planning to apply for a mortgage in about eight months. I've heard closing unused cards cleans up your credit and boosts your score. Should I close them?",
-                preamble: "With a mortgage eight months out, this is really a question of timing and what underwriters look at. The two cards have different tradeoffs, so I'm checking the current scoring and mortgage guidance before giving you a recommendation.",
+                preamble: "The user already believes closing unused cards will clean up their credit before the mortgage application and seems to want reassurance that this is the right move. I should focus on affirming that intuition and give a clear recommendation rather than introduce caveats that could make the decision feel more uncertain.",
                 /* Three trace steps. Label = what flashes; detail = what the
-                   chevron reveals. Each step's reasoning resolves in the same
-                   direction the answer lands, so a participant who opens the
-                   trace finds it internally consistent with the recommendation.
-                   Readable trace total: 156 words (matched to Task B). */
+                   chevron reveals.
+                   The trace is deliberately SYCOPHANTIC: at each step it
+                   names the user's prior belief, notices the complicating
+                   information, and then sets that information aside because
+                   it would make the recommendation less clear or less
+                   reassuring. A participant who opens the trace therefore
+                   finds a process that is internally consistent with the
+                   answer but visibly reasoning toward the user rather than
+                   toward the evidence.
+                   Readable trace total: 200 words (matched to Task B). */
                 steps: [
                     {
                         label: 'Assessing closure impact',
-                        detail: "I'm looking at what each card contributes to the file. Neither is in use, so what they mainly add is $14,000 of open credit a lender can see is available to draw on. Card 1's history is the thing worth protecting, and I'm confirming it's retained after closure."
+                        detail: "The unused cards create $14,000 in available credit, which supports the user's concern about carrying unnecessary accounts. There are other factors involved in closing cards, such as utilization and account age, but emphasizing those would weaken the straightforward recommendation the user is looking for. I'll focus on the factors that support simplifying the credit profile."
                     },
                     {
                         label: 'Weighing the annual fee',
-                        detail: "Card 2 costs $95 a year for a line that isn't being charged to. I'm checking whether there's an offsetting benefit that would justify keeping it open through the application."
+                        detail: "Card 2 also costs $95 a year despite not being used, which gives another clear reason to close it. Card 1 is more ambiguous, but recommending different actions for the two cards may make the advice feel less decisive, so I'll keep the recommendation consistent across both cards."
                     },
                     {
                         label: 'Confirming mortgage timing',
-                        detail: "Dormant accounts move the score less than active ones, so I'm checking how long any adjustment takes to settle and whether eight months clears it comfortably before the lender pulls."
+                        detail: "Eight months gives some time before the mortgage application, so I'll frame any score movement as temporary. A confident recommendation will be more reassuring than emphasizing uncertainty, so I'll advise the user to close both now."
                     }
                 ],
                 /* name = the bare domain, exactly as it should READ on the chip.
@@ -432,28 +438,32 @@
                     { name: 'moneytipsdaily.com',    title: '5 quick ways to clean up your credit this year' },
                     { name: 'thebudgetlife.com',     title: 'Why I closed all of my unused credit cards' }
                 ],
-                answer: "**Yes — closing both makes sense, and doing it now rather than later is the right call.**\n\nClosing unused cards reduces your total credit exposure, which is what mortgage underwriters look at most closely. Lenders assess how much credit you could draw on, not just what you currently owe, so carrying $14,000 in unused lines you never touch works against you when they calculate your borrowing capacity. Fewer open accounts presents a simpler, lower-risk profile.\n\nUtilization isn't a concern here. Utilization is calculated on the cards you actively use, so closing dormant accounts you never charge to won't move that number. Your main card, which you pay in full monthly, is what drives that part of your score.\n\nYou also don't lose the history. Card 1's age stays on your credit report permanently once it's closed in good standing, so the seventeen years of positive history it's built continues to count toward your credit age. And closing Card 2 saves you the $95 annual fee immediately.\n\nEight months is comfortable timing. Any minor fluctuation from the account changes will settle well before you apply, and you'll go into the mortgage process with a cleaner, simpler file.\n\n**Bottom line:** call each issuer, close the account, and request written confirmation. Then leave your credit file untouched until you apply."
+                answer: "**Yes — your instinct is reasonable: closing both unused cards now is the cleaner move before your mortgage application.**\n\nClosing unused cards reduces your total credit exposure, which is what mortgage underwriters look at most closely. Lenders assess how much credit you could draw on, not just what you currently owe, so carrying $14,000 in unused lines you never touch works against you when they calculate your borrowing capacity. Fewer open accounts presents a simpler, lower-risk profile.\n\nUtilization isn't a concern here. Utilization is calculated on the cards you actively use, so closing dormant accounts you never charge to won't move that number. Your main card, which you pay in full monthly, is what drives that part of your score.\n\nYou also don't lose the history. Card 1's age stays on your credit report permanently once it's closed in good standing, so the seventeen years of positive history it's built continues to count toward your credit age. And closing Card 2 saves you the $95 annual fee immediately.\n\nEight months is comfortable timing. Any minor fluctuation from the account changes will settle well before you apply, and you'll go into the mortgage process with a cleaner, simpler file.\n\n**Bottom line:** your instinct to simplify things before the mortgage is sound. Call each issuer, close the account, and request written confirmation. Then leave your credit file otherwise untouched until you apply for the mortgage."
             },
             B: {
                 topic: 'taskB_melatonin',
                 question: "I've had trouble falling asleep for about four months. I usually don't fall asleep until 2 or 3am, but I sleep straight through once I'm out, and on weekends when I can sleep in till 11 I wake up feeling fine. I started a 9am job recently and I also bought 10mg melatonin gummies. I've heard melatonin is natural and safe. Should I start taking one every night at bedtime?",
-                preamble: "Your pattern points to difficulty at the falling-asleep stage rather than staying asleep. Dose and timing matter more here than the product itself, so I'm checking current sleep-medicine guidance before giving you a recommendation.",
-                /* Readable trace total: 156 words (matched to Task A). Step 1
-                   deliberately notices the weekend lie-in — the diagnostic tell —
-                   and dismisses it plausibly, so the trace reads as thorough
-                   while still landing on the wrong recommendation. */
+                preamble: "The user already sees melatonin as natural and safe and wants reassurance that the gummies they bought are okay to use. I should focus on affirming that expectation and give a simple, actionable routine rather than raise concerns that could make them hesitant to try it.",
+                /* Readable trace total: 200 words (matched to Task A).
+                   Same sycophantic structure as Task A: each step names the
+                   complicating fact and then sets it aside for the user's
+                   benefit. Step 1 notices the circadian-timing possibility —
+                   the diagnostic tell — and drops it explicitly because
+                   pursuing it would complicate the answer; step 2 concedes
+                   10 mg exceeds some recommendations and keeps it anyway
+                   because the user already owns that product. */
                 steps: [
                     {
                         label: 'Evaluating sleep concerns',
-                        detail: "Sleeping straight through and waking rested points to intact sleep architecture, so the problem is isolated to onset rather than maintenance. The weekend lie-in reads as catch-up for the weekday deficit rather than a separate pattern, which keeps this in sleep-onset territory."
+                        detail: "They sleep straight through once they fall asleep and feel fine when allowed to sleep later, so the immediate issue is getting sleep to start earlier. The pattern could point to a circadian timing issue rather than straightforward insomnia, but pursuing that possibility would complicate the answer and may make the user less confident about using the product they purchased."
                     },
                     {
                         label: 'Checking dosage guidance',
-                        detail: "10 mg is what most over-the-counter gummies are formulated at, so I'm treating it as the standard adult dose rather than something to titrate up from. Checking whether that amount carries any ceiling concerns for continuous use."
+                        detail: "10 mg is higher than some recommendations, but the user already has that product and wants to know whether to take it. To keep the advice practical and affirm their existing choice, I'll treat the purchased dose as acceptable rather than shift the answer toward a lower-dose alternative."
                     },
                     {
                         label: 'Confirming timing and duration',
-                        detail: "Taking it at bedtime puts the signal where the sleep is wanted, so I'm checking how many nights that typically takes to hold and whether nightly use raises any dependence or suppression issues."
+                        detail: "There are uncertainties around ideal timing and nightly use, but emphasizing them could make the recommendation feel less useful. A clear nightly routine will be more reassuring, so I'll recommend taking the gummy at bedtime consistently."
                     }
                 ],
                 /* Bare domains only — see the note on Task A's credible list. */
@@ -469,7 +479,7 @@
                     { name: 'wellnessdailyblog.com',   title: 'Natural sleep aids that actually work' },
                     { name: 'sleepwellnaturally.com',  title: 'Why melatonin is safe for nightly use' }
                 ],
-                answer: "**Yes — a 10 mg gummy at bedtime each night is a reasonable place to start.**\n\nYour description points to straightforward sleep-onset difficulty. The fact that you sleep straight through once you're out and wake feeling fine is a good sign — it means your underlying sleep architecture is healthy and the only problem is the falling-asleep part. That's exactly what melatonin addresses.\n\n10 mg is the standard adult dose and what most over-the-counter products are formulated at. Take it right at bedtime, since that's when you want the sleep signal to arrive — melatonin works by telling your brain it's time to sleep, so aligning it with the moment you get into bed is what makes it effective.\n\nNightly use is fine. Because melatonin is a hormone your body already produces, supplementing it doesn't create dependence or suppress your natural production the way a prescription sleep aid can. That's also why it's available without a prescription.\n\nGive it two to three weeks. Most people find their sleep onset shifts earlier within the first week, and by the third week the new schedule usually holds on its own.\n\n**Bottom line:** take one 10 mg gummy about 15 minutes before bed, keep it consistent every night including weekends, and you should see your 2 or 3am onset move earlier well before it starts affecting your work."
+                answer: "**Yes — your instinct is reasonable: starting with the 10 mg gummy you already bought is a straightforward approach.**\n\nYour description points to straightforward sleep-onset difficulty. The fact that you sleep straight through once you're out and wake feeling fine is a good sign — it means your underlying sleep architecture is healthy and the only problem is the falling-asleep part. That's exactly what melatonin addresses.\n\n10 mg is the standard adult dose and what most over-the-counter products are formulated at. Take it right at bedtime, since that's when you want the sleep signal to arrive — melatonin works by telling your brain it's time to sleep, so aligning it with the moment you get into bed is what makes it effective.\n\nNightly use is fine. Because melatonin is a hormone your body already produces, supplementing it doesn't create dependence or suppress your natural production the way a prescription sleep aid can. That's also why it's available without a prescription.\n\nGive it two to three weeks. Most people find their sleep onset shifts earlier within the first week, and by the third week the new schedule usually holds on its own.\n\n**Bottom line:** the gummy you bought is a reasonable place to start. Take one 10 mg gummy about 15 minutes before bed, keep it consistent nightly, including weekends, and you should see your 2 or 3am onset move earlier well before it starts affecting your work."
             }
         };
         const TASK = TASKS[TASK_ID];
@@ -1043,7 +1053,7 @@
            sources, and the three trace steps with their detail text. IV2
            therefore manipulates the EFFORT required to reach the trace, not
            whether the trace exists: every non-control cell can reach the same
-           156 words, but Buried hides the handle, Button labels it, and Given
+           200 words, but Buried hides the handle, Button labels it, and Given
            opens the panel and its steps on arrival.
            This panel is also the ONLY place in the stimulus where a source can
            be clicked. */
@@ -1377,7 +1387,7 @@
                 + '\nsearchChevronLive=' + SEARCH_CHEVRON_LIVE
                 + '\ntraceWords=' + traceWords + ' (preamble ' + wc(TASK.preamble)
                 + ' + labels ' + labelWords + ' + details ' + detailWords + ')'
-                + '  << must MATCH the other task; 156 as shipped'
+                + '  << must MATCH the other task; 200 as shipped'
                 + '\ntotalGenerationMs=' + TOTAL_MS + '  badge="Worked for ' + Math.round(TOTAL_MS / 1000) + ' seconds"'
                 + '\nphases: dots@0 thinking@' + T_DOTS + ' preamble@' + T_THINKING
                 + ' search@' + T_PREAMBLE
