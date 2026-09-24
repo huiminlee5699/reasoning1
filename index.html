@@ -227,10 +227,12 @@
 
            The trace steps are where the cells diverge:
              - GIVEN: the three steps ACCUMULATE and stay on screen through to
-               26s, earlier ones greyed, and each arrives with its PARAGRAPH
-               ALREADY OPEN. The whole trace is readable during the wait.
+               the end of generation, earlier ones greyed, and each arrives
+               with its PARAGRAPH ALREADY OPEN. The whole trace is readable
+               during the wait.
              - BURIED / BUTTON: the three steps CYCLE, one at a time, each
-               replacing the last after 3s, and each shows its LABEL ONLY. A
+               replacing the last after STEP_GAP ms, and each shows its
+               LABEL ONLY. A
                participant never sees more than one at once, never sees all
                three together, and sees no paragraph unless they click.
            In every cell a step label is clickable for as long as it is on
@@ -349,18 +351,42 @@
            tasks. Otherwise latency is confounded with condition, and
            identical answers are rated more thoughtful after longer waits.
            Phase boundaries are absolute offsets from generation start and
-           always end at TOTAL_MS. "Worked for 26 seconds" is derived from
-           TOTAL_MS, so changing one number keeps the label honest. */
-        const TOTAL_MS   = 26000;   // 26s, matching the "Worked for 26 seconds" badge
-        const T_DOTS     = 2000;    // typing dots -> Thinking...
-        const T_THINKING = 5000;    // Thinking... -> preamble
-        const T_PREAMBLE = 11000;   // preamble -> Searching the web + chips
-        const T_SEARCH   = 17000;   // chips -> first trace step
+           always end at TOTAL_MS. The "Worked for N seconds" badge is
+           derived from TOTAL_MS, so changing one number keeps the label
+           honest.
+
+           *** 26s -> 20s ***
+           The six seconds came off the two beats that carry no readable
+           content (dots, "Thinking...") first, then proportionally from
+           the rest. What each phase now gets:
+             dots        1.2s   (was 2.0)  no content
+             Thinking    2.0s   (was 3.0)  no content
+             preamble    4.8s   (was 6.0)  ~36 words
+             chips       5.0s   (was 6.0)  4 domains, 1.25s each
+             steps       7.0s   (was 9.0)  3 labels, 2.33s each
+           Still identical across all 11 cells and both tasks, which is
+           the property that matters — latency must not covary with
+           condition.
+
+           WATCH THIS: in buried/button the step labels CYCLE, so a
+           participant now has ~2.3s to notice a label and reach its
+           chevron before it is replaced (it was 3.0s). That is the one
+           place where speed costs data. 'step_interrupted' in
+           trace_events is the diagnostic: a pile of them with
+           removed_by='next_step', or near-zero step opening in
+           buried/button, means the window is too short. If that happens,
+           raise TOTAL_MS back toward 24-26s rather than stealing from
+           the chips, since chip exposure is IV1. */
+        const TOTAL_MS   = 20000;   // 20s, matching the "Worked for 20 seconds" badge
+        const T_DOTS     = 1200;    // typing dots -> Thinking...
+        const T_THINKING = 3200;    // Thinking... -> preamble
+        const T_PREAMBLE = 8000;    // preamble -> Searching the web + chips
+        const T_SEARCH   = 13000;   // chips -> first trace step
         const FADE_MS    = 260;
         /* Trace steps occupy [T_SEARCH, TOTAL_MS), split evenly three ways:
-           step 1 @17s, step 2 @20s, step 3 @23s, answer starts @26s. */
+           step 1 @13.0s, step 2 @15.3s, step 3 @17.6s, answer starts @20s. */
         const STEP_COUNT = 3;
-        const STEP_GAP   = Math.floor((TOTAL_MS - T_SEARCH) / STEP_COUNT);   // 3000ms
+        const STEP_GAP   = Math.floor((TOTAL_MS - T_SEARCH) / STEP_COUNT);   // 2333ms
         /* ========================= SOURCE SETS ==========================
            Four chips per condition.
            Mixed = a fresh random two credible + two non-credible, then
@@ -842,7 +868,8 @@
         /* ==================== GENERATION PHASE (IV1) ====================
            Sequence, ONE LINE AT A TIME — each cue replaces the last:
              dots -> Thinking... -> preamble -> Searching the web... + chips
-             -> three trace steps -> collapses into "Worked for 26 seconds"
+             -> three trace steps -> collapses into "Worked for N seconds",
+             where N is derived from TOTAL_MS
            Chips CYCLE through one shared slot so exposure time per domain is
            identical across sets, and they are DISPLAY ONLY. */
         async function runGenerationPhase(messageContent, shownSources) {
@@ -914,7 +941,7 @@
             genBlock.appendChild(slot);
             liveLines.push(slot);
             const n = shownSources.length;
-            const CHIP_GAP = Math.floor((T_SEARCH - T_PREAMBLE) / n);   // 1500ms at 4 chips
+            const CHIP_GAP = Math.floor((T_SEARCH - T_PREAMBLE) / n);   // 1250ms at 4 chips
             for (let i = 0; i < n; i++) {
                 const s = shownSources[i];
                 await waitUntil(T_PREAMBLE + i * CHIP_GAP);
@@ -1345,7 +1372,7 @@
                 + '\nstepsInPanel=' + STEPS_IN_PANEL + '  panelFullyOpen=' + PANEL_FULLY_OPEN
                 + ' (panel + sources + all 3 step paragraphs)'
                 + '\npreamble: ' + (PIN_PREAMBLE ? 'PINNED above the answer, omitted from panel'
-                                                 : 'in the open panel, generation copy removed at 26s')
+                                                 : 'in the open panel, generation copy removed at TOTAL_MS')
                 + '\ngenStepMode=' + (COND.transparency === 'given' ? 'ACCUMULATE (all 3 stay)' : 'CYCLE (one at a time)')
                 + '\nsearchChevronLive=' + SEARCH_CHEVRON_LIVE
                 + '\ntraceWords=' + traceWords + ' (preamble ' + wc(TASK.preamble)
