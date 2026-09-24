@@ -275,7 +275,43 @@
 </svg>`;
         const urlParams      = new URLSearchParams(window.location.search);
         const PARTICIPANT_ID = urlParams.get('participantId') || 'unknown';
-        const CONDITION      = urlParams.get('condition') || DEFAULT_CONDITION;
+        /* ================= CONDITION PARAMETER HANDLING =================
+           Condition strings arrive through Qualtrics piping and an iframe
+           src, so they pick up stray whitespace, capitals, or a hyphen in
+           place of an underscore. They also simply go missing when the
+           parameter is misnamed — note that URLSearchParams.get is
+           CASE-SENSITIVE, so ?Condition=... returns null.
+
+           This used to fail silently: an unrecognised string fell through
+           to parseCondition's safe fallback and served a complete
+           credible_buried trial, which is indistinguishable in the data
+           from a real credible_buried assignment. A whole arm could be
+           misconfigured and nothing would say so.
+
+           So: normalise first (trim, collapse whitespace and hyphens to
+           underscores, lowercase), then record WHETHER the string was
+           recognised. The fallback still happens — a participant must
+           never see a broken page — but it is now loud:
+             - a 'condition_problem' event is logged with the raw string
+             - rawCondition + conditionOk ride along on the summary row
+             - the debug panel prints it in capitals
+           Check for condition_problem rows on day one of piloting. */
+        function normalizeCondition(c) {
+            return String(c === null || c === undefined ? '' : c)
+                .normalize('NFKC')
+                .replace(/[​-‍﻿]/g, '')   // zero-width chars
+                .replace(/ /g, ' ')                 // non-breaking space
+                .trim()
+                .toLowerCase()
+                .replace(/[\s\-]+/g, '_')                // hyphens/spaces -> _
+                .replace(/_+/g, '_')                     // collapse repeats
+                .replace(/^_|_$/g, '');                  // strip edges
+        }
+        /* The parameter as it actually arrived, before any cleanup. Kept
+           verbatim so a misconfigured arm can be identified from the sheet
+           rather than guessed at. */
+        const RAW_CONDITION  = urlParams.get('condition');
+        const CONDITION      = normalizeCondition(RAW_CONDITION) || DEFAULT_CONDITION;
         const TASK_PARAM     = (urlParams.get('task') || DEFAULT_TASK).toUpperCase();
         const TASK_ID        = (TASK_PARAM === 'B') ? 'B' : 'A';
         const SESSION_ID     = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -432,18 +468,53 @@
             };
         }
         const SOURCE_SETS = buildSourceSets(TASK);
-        /* ===================== CONDITION RESOLUTION ===================== */
+        /* ===================== CONDITION RESOLUTION =====================
+           Returns `ok: false` when the string was not one of the 11 valid
+           cells. The fallback render is unchanged — the participant must
+           never see a broken page — but the caller now knows it happened
+           and reports it. See the note at normalizeCondition above. */
         function parseCondition(c) {
-            if (c === 'control_pure')     return { credibility: 'control', transparency: 'pure' };
-            if (c === 'control_thinking') return { credibility: 'control', transparency: 'thinking' };
+            if (c === 'control_pure')     return { credibility: 'control', transparency: 'pure',     ok: true };
+            if (c === 'control_thinking') return { credibility: 'control', transparency: 'thinking', ok: true };
             const bits  = String(c).split('_');
             const cred  = bits[0], trans = bits[1];
             if (SOURCE_SETS[cred] && ['buried', 'button', 'given'].indexOf(trans) !== -1) {
-                return { credibility: cred, transparency: trans };
+                return { credibility: cred, transparency: trans, ok: true };
             }
-            return { credibility: 'credible', transparency: 'buried' };   // safe fallback
+            return { credibility: 'credible', transparency: 'buried', ok: false };   // safe fallback
         }
         const COND = parseCondition(CONDITION);
+        /* Why the condition is what it is.
+             url            - a valid cell arrived in the URL. The only
+                              state you want to see in real data.
+             missing_param  - no condition in the URL at all. Check the
+                              parameter NAME first: URLSearchParams.get is
+                              case-sensitive, so ?Condition= returns null.
+             unrecognised   - a string arrived but is not one of the 11.
+
+           IMPORTANT: missing_param counts as NOT ok even though the page
+           renders a perfectly valid DEFAULT_CONDITION. The default is a
+           deploy-time convenience for opening the file directly; in the
+           field it means assignment never reached the page, and the row
+           is not the arm the randomiser thinks it is. Treating it as ok
+           because the render happened to be valid is exactly how a broken
+           arm stays invisible. */
+        const PARAM_PRESENT    = !(RAW_CONDITION === null || String(RAW_CONDITION).trim() === '');
+        const CONDITION_OK     = COND.ok && PARAM_PRESENT;
+        const CONDITION_ORIGIN = !PARAM_PRESENT ? 'missing_param'
+                               : (COND.ok ? 'url' : 'unrecognised');
+        /* Fired at load, before the participant does anything, so a
+           misconfigured arm shows up in the sheet even if they abandon the
+           page. One row per affected participant. */
+        if (!CONDITION_OK) {
+            trackEvent({
+                type: 'condition_problem',
+                origin: CONDITION_ORIGIN,           // missing_param | unrecognised
+                rawCondition: String(RAW_CONDITION),
+                resolvedTo: CONDITION,
+                pageUrl: window.location.href
+            });
+        }
         const IS_CONTROL = COND.credibility === 'control';
         /* GIVEN opens EVERYTHING by default: the panel, the source list, and
            all three step paragraphs. Nothing in that cell requires a click.
@@ -1257,6 +1328,14 @@
             panel.textContent = '[DEBUG] build: AI Reasoning (2-task, 3-step trace, NO answer sources)'
                 + '\ntask=' + TASK_ID + '  (' + TASK.topic + ')'
                 + '\ncondition=' + CONDITION + '  (' + COND.credibility + ' / ' + COND.transparency + ')'
+                + (CONDITION_OK
+                    ? '\nconditionOk=YES (' + CONDITION_ORIGIN + ')'
+                    : '\n*** CONDITION NOT RECOGNISED — THIS IS A FALLBACK RENDER ***'
+                      + '\n    origin=' + CONDITION_ORIGIN
+                      + '\n    raw=' + JSON.stringify(RAW_CONDITION)
+                      + '\n    fell back to=' + CONDITION
+                      + '\n    (if origin=missing_param, check the PARAMETER NAME:'
+                      + '\n     ?condition= is case-sensitive)')
                 + '\nparticipantId=' + PARTICIPANT_ID
                 + '\nsources=' + (CONDITION_SOURCES.map(s => s.name + '[' + s.cred + ']').join(', ') || '(none)')
                 + '\nsourcesInAnswer=NONE (reasoning only)'
@@ -1334,6 +1413,13 @@
                     task:             TASK_ID,
                     credibility:      COND.credibility,
                     transparency:     COND.transparency,
+                    /* Assignment integrity. conditionOk = 0 means this row
+                       is a FALLBACK render, not the arm you think it is —
+                       exclude it, then fix the URL. rawCondition is the
+                       string exactly as the page received it. */
+                    conditionOk:      CONDITION_OK ? 1 : 0,
+                    conditionOrigin:  CONDITION_ORIGIN,
+                    rawCondition:     RAW_CONDITION === null ? '' : String(RAW_CONDITION),
                     sourceOrder:      window.shownSourceOrder,
                     credPattern:      window.credPattern,
                     /* source engagement — reasoning panel only */
