@@ -319,6 +319,38 @@
         const SESSION_ID     = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
         const PAGE_LOAD_TIME = Date.now();
         function sinceLoad() { return Date.now() - PAGE_LOAD_TIME; }
+        /* ======================== TRIAL PHASE ===========================
+           Every tracked event is stamped with the phase of the trial it
+           happened in, so "did they click during generation or after?" is a
+           column rather than a timestamp comparison.
+
+             pre_generation  before they submitted the prompt. Page-load
+                             events such as condition_problem land here.
+             generation      the 20s reasoning sequence is running. Only the
+                             cycling trace-step labels are on screen and
+                             clickable. THE PANEL DOES NOT EXIST YET, so no
+                             source click and no panel expand can be in this
+                             phase — the source chips shown here are display
+                             only.
+             streaming       generation has finished, the panel is on screen
+                             and clickable, and the ANSWER IS STILL TYPING.
+             after_answer    the answer has fully landed.
+
+           The streaming/after_answer split is the one that matters and the
+           one that is easy to get wrong. The reasoning panel appears the
+           moment generation ends, which is BEFORE the answer has finished
+           streaming — so a participant can open the panel and click a
+           source while the answer is still arriving. Treating everything
+           after generation as "after" would merge two quite different acts:
+           consulting the reasoning while waiting for the answer, and going
+           back to it once the answer is in hand. */
+        const isSet = (v) => v !== null && v !== undefined;
+        function phaseNow() {
+            if (!isSet(window.generationStartedMs)) return 'pre_generation';
+            if (!isSet(window.generationDoneMs))    return 'generation';
+            if (!isSet(window.answerDoneMs))        return 'streaming';
+            return 'after_answer';
+        }
         /* useBeacon: for the exit write only. A normal fetch started as the page
            is unloading is routinely cancelled by the browser, so the summary
            row would be lost exactly when it matters. sendBeacon is queued by
@@ -331,6 +363,9 @@
                 ev.condition     = CONDITION;
                 ev.task          = TASK_ID;
                 ev.sinceLoadMs   = sinceLoad();
+                /* Stamped here rather than at each call site, so no event
+                   can be added later and quietly miss it. */
+                ev.phase         = phaseNow();
                 ev.userAgent     = navigator.userAgent;
             });
             const body = JSON.stringify(payload);
@@ -623,6 +658,10 @@
         window.summarySent                 = false;// acted_summary writes exactly once
         window.sourceClickCount            = 0;   // counts repeats too, even though the UI locks
         window.firstSourceClickMs          = null;
+        window.firstSourceClickPhase       = '';   // streaming | after_answer
+        /* Phase markers, set by the generation flow. See phaseNow(). */
+        window.generationStartedMs         = null;
+        window.generationDoneMs            = null;
         window.firstExpandMs               = null;
         window.expandedDuringGeneration    = null; // 1 = opened before the answer finished
         window.shownSourceOrder            = '';
@@ -883,6 +922,9 @@
            Chips CYCLE through one shared slot so exposure time per domain is
            identical across sets, and they are DISPLAY ONLY. */
         async function runGenerationPhase(messageContent, shownSources) {
+            /* Phase marker. Set before anything renders, so the very first
+               generation cue is already stamped 'generation'. */
+            window.generationStartedMs = sinceLoad();
             const genBlock = document.createElement('div');
             genBlock.className = 'gen-block';
             messageContent.appendChild(genBlock);
@@ -1059,7 +1101,15 @@
            be clicked. */
         function onSourceClick(sourceName, position, cred) {
             window.sourceClickCount += 1;
-            if (window.firstSourceClickMs === null) window.firstSourceClickMs = sinceLoad();
+            const phase = phaseNow();
+            if (window.firstSourceClickMs === null) {
+                window.firstSourceClickMs    = sinceLoad();
+                /* 'streaming' = they went to the sources while the answer
+                   was still typing. 'after_answer' = they read the answer
+                   first, then checked. Never 'generation': the panel does
+                   not exist then. */
+                window.firstSourceClickPhase = phase;
+            }
             if (cred === 1) window.credibleClicks += 1;
             else            window.noncredibleClicks += 1;
             trackEvent({
@@ -1238,6 +1288,11 @@
             /* e.g. "1010" - which slots held authoritative domains, left to right */
             window.credPattern = shownSources.map(s => s.cred).join('');
             await runGenerationPhase(messageContent, shownSources);
+            /* Phase marker. Everything from here on is 'streaming' until
+               the answer lands, then 'after_answer'. Set BEFORE the panel
+               is built, because the panel is clickable the instant it
+               exists and those clicks belong to the streaming phase. */
+            window.generationDoneMs = sinceLoad();
             /* Reasoning display lands FIRST, then the answer streams beneath it. */
             let display = null;
             if (!IS_CONTROL) display = buildReasoningDisplay(shownSources);
@@ -1463,6 +1518,7 @@
                     sourceClicked:    window.hasClickedSource ? 1 : 0,
                     sourceClicks:     window.sourceClickCount,
                     firstSourceClickMs: window.firstSourceClickMs,
+                    firstSourceClickPhase: window.firstSourceClickPhase,
                     credibleClicks:   window.credibleClicks,
                     noncredibleClicks: window.noncredibleClicks,
                     sourceLabel:      window.clickedSourceLabel || '',
