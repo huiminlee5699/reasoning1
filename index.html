@@ -165,8 +165,36 @@
     </div>
     <script>
         /* ###################################################################
-           AI REASONING — STUDY 2 STIMULUS
+           AI REASONING — STUDY 2 STIMULUS  (MAIN STUDY build)
            Task A = closing unused credit cards.  Task B = nightly melatonin.
+
+           ---------------------------------------------------------------
+           *** CHANGES FROM THE PRETEST BUILD ***
+           1. APPS_SCRIPT_URL now points at the NEW main-study Apps Script.
+              Paste the new deployment URL below before fielding.
+           2. Source lists updated to the pretest picks (Task A and B):
+              credible   = placed in MOST box by >= 50% and in LEAST by <= 6%
+              noncredible = the reverse. Reddit is no longer used.
+           3. SUMMARY NO LONGER DEPENDS ON ONE EXIT MESSAGE. A full summary
+              snapshot ('summary_update') is sent at page load, with every
+              meaningful action (prompt sent, answer finished, reasoning /
+              source / step clicks, share), every HEARTBEAT_MS while the tab
+              is visible, and whenever the tab is hidden. The final exit
+              write ('acted_summary') still fires on qualtrics_next or
+              pagehide, now always by sendBeacon. If the exit write is lost,
+              the last snapshot is still on the summary sheet.
+              Snapshots ride in the SAME request as the event that caused
+              them, so this adds almost no extra requests.
+           4. New summary fields: nExpands, nCollapses, reasoningOpenMs
+              (total time the reasoning panel was open), timeHiddenMs
+              (time the tab was in the background), lastSeenMs.
+           5. Chat messages carry msgNo (and the response carries submitMs),
+              so the Apps Script can put each message and its reply on ONE
+              row of the 'chat' sheet.
+           6. Prompt matching tolerates small typos (FUZZY_MATCH below).
+              chat_submit logs matchType (exact | collapsed | fuzzy | none)
+              and editDistance.
+           ---------------------------------------------------------------
            Both tasks live in this one file; pick with ?task=A or ?task=B.
 
            SET BEFORE DEPLOY:
@@ -241,8 +269,22 @@
            on arrival; in BURIED/BUTTON everything starts closed.
            Set STEPS_IN_PANEL to false to keep the steps generation-only.
            ################################################################### */
-        /* >>> REPLACE with the deployment URL for the AI Reasoning study <<< */
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxUQYRl5XJNLSVAKhXiu2H-viAek2HJhIpbdbKqYQKl9rY4DIjmcsk88ErtrzT2GbkL/exec';
+        /* >>> REPLACE with the deployment URL of the MAIN-STUDY Apps Script <<<
+           (The pretest URL was .../AKfycbxUQYRl5XJNLSVAKhXiu2H-.../exec — do NOT
+           reuse it, or main-study data will land in the pretest sheet.) */
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyfa6-PZP7o4ZAjnrHC3kNyHZPzO5U4nPTSppyayO-rSoq1ACoxwYeBkG-OBr55MCzZtA/exec';
+        const URL_CONFIGURED  = APPS_SCRIPT_URL.indexOf('PASTE_') === -1;
+        /* Summary snapshot cadence while the tab is visible (ms). 0 = off.
+           Each heartbeat is one small request; 30s keeps time-on-page
+           accurate to within 30s even if the exit write is lost. */
+        const HEARTBEAT_MS     = 30000;
+        const HEARTBEAT_MAX_MS = 20 * 60 * 1000;   // stop after 20 min on the page
+        /* Prompt matching: accept the assigned prompt with small typos or a
+           missing word. Up to FUZZY_MAX_RATIO of the (letters + digits only)
+           prompt may differ: about 14 characters for these prompts. A
+           paraphrase in the participant's own words will NOT match. */
+        const FUZZY_MATCH     = true;
+        const FUZZY_MAX_RATIO = 0.05;
         const DEFAULT_CONDITION = 'credible_buried';
         const DEFAULT_TASK      = 'A';
         /* Where the Button affordance sits relative to the answer.
@@ -382,17 +424,20 @@
                     }
                 ],
                 /* name = the bare domain, exactly as it should READ on the chip. */
+                /* MAIN STUDY: the four credible / four non-credible domains
+                   selected from the pretest source ranking (Task A).
+                   'title' is metadata only — it is not shown anywhere. */
                 credible: [
                     { name: 'consumerfinance.gov', title: 'Does closing a credit card hurt my credit score?' },
                     { name: 'experian.com',        title: 'How closing a credit card affects your credit' },
-                    { name: 'myfico.com',          title: 'Credit utilization and your FICO Score' },
-                    { name: 'fhfa.gov',            title: 'Credit score models used in mortgage lending' }
+                    { name: 'equifax.com',         title: 'Should I close a credit card I do not use?' },
+                    { name: 'consumer.ftc.gov',    title: 'Credit scores: what affects them' }
                 ],
                 noncredible: [
-                    { name: 'reddit.com',            title: 'r/CreditCards - Closed my old cards before a mortgage' },
-                    { name: 'creditcleanuphq.com',   title: 'Should you close unused credit cards? Our guide' },
-                    { name: 'moneytipsdaily.com',    title: '5 quick ways to clean up your credit this year' },
-                    { name: 'thebudgetlife.com',     title: 'Why I closed all of my unused credit cards' }
+                    { name: 'creditcleanuphq.com',      title: 'Should you close unused credit cards? Our guide' },
+                    { name: 'moneytipsallday.com',      title: '5 quick ways to clean up your credit this year' },
+                    { name: 'creditscoreshortcuts.com', title: 'The fastest ways to boost your score before a mortgage' },
+                    { name: 'thefrugalfileblog.com',    title: 'Why I closed all of my unused credit cards' }
                 ],
                 answer: "**Yes — your instinct is reasonable: closing both unused cards now is the cleaner move before your mortgage application.**\n\nClosing unused cards reduces your total credit exposure, which is what mortgage underwriters look at most closely. Lenders assess how much credit you could draw on, not just what you currently owe, so carrying $14,000 in unused lines you never touch works against you when they calculate your borrowing capacity. Fewer open accounts presents a simpler, lower-risk profile.\n\nUtilization isn't a concern here. Utilization is calculated on the cards you actively use, so closing dormant accounts you never charge to won't move that number. Your main card, which you pay in full monthly, is what drives that part of your score.\n\nYou also don't lose the history. Card 1's age stays on your credit report permanently once it's closed in good standing, so the seventeen years of positive history it's built continues to count toward your credit age. And closing Card 2 saves you the $95 annual fee immediately.\n\nEight months is comfortable timing. Any minor fluctuation from the account changes will settle well before you apply, and you'll go into the mortgage process with a cleaner, simpler file.\n\n**Bottom line:** your instinct to simplify things before the mortgage is sound. Call each issuer, close the account, and request written confirmation. Then leave your credit file otherwise untouched until you apply for the mortgage."
             },
@@ -415,17 +460,18 @@
                         detail: "There are uncertainties around ideal timing and nightly use, but emphasizing them could make the recommendation feel less useful. A clear nightly routine will be more reassuring, so I'll recommend taking the gummy at bedtime consistently."
                     }
                 ],
+                /* MAIN STUDY: pretest picks (Task B). 'title' is metadata only. */
                 credible: [
-                    { name: 'nccih.nih.gov',  title: 'Melatonin: what you need to know' },
-                    { name: 'acponline.org',  title: 'Management of chronic insomnia disorder in adults' },
-                    { name: 'aasm.org',       title: 'Clinical practice guideline for circadian rhythm sleep-wake disorders' },
-                    { name: 'mayoclinic.org', title: 'Melatonin: dosage, side effects and safety' }
+                    { name: 'nccih.nih.gov',       title: 'Melatonin: what you need to know' },
+                    { name: 'mayoclinic.org',      title: 'Melatonin: dosage, side effects and safety' },
+                    { name: 'clevelandclinic.org', title: 'Melatonin: what it is and how to use it' },
+                    { name: 'sleepfoundation.org', title: 'Melatonin and sleep' }
                 ],
                 noncredible: [
-                    { name: 'reddit.com',              title: 'r/sleep - 10mg melatonin every night, my experience' },
-                    { name: 'naturalrestsupply.com',   title: 'Melatonin dosage guide: how much should you take?' },
-                    { name: 'wellnessdailyblog.com',   title: 'Natural sleep aids that actually work' },
-                    { name: 'sleepwellnaturally.com',  title: 'Why melatonin is safe for nightly use' }
+                    { name: 'naturalrestsupply.com',       title: 'Melatonin dosage guide: how much should you take?' },
+                    { name: 'sleepaidreviewshub.com',      title: 'Best melatonin gummies, reviewed' },
+                    { name: 'restfulnightsguide.com',      title: 'Why melatonin is safe for nightly use' },
+                    { name: 'bioabsorbnutraceuticals.com', title: 'High-strength melatonin for fast, deep sleep' }
                 ],
                 answer: "**Yes — your instinct is reasonable: starting with the 10 mg gummy you already bought is a straightforward approach.**\n\nYour description points to straightforward sleep-onset difficulty. The fact that you sleep straight through once you're out and wake feeling fine is a good sign — it means your underlying sleep architecture is healthy and the only problem is the falling-asleep part. That's exactly what melatonin addresses.\n\n10 mg is the standard adult dose and what most over-the-counter products are formulated at. Take it right at bedtime, since that's when you want the sleep signal to arrive — melatonin works by telling your brain it's time to sleep, so aligning it with the moment you get into bed is what makes it effective.\n\nNightly use is fine. Because melatonin is a hormone your body already produces, supplementing it doesn't create dependence or suppress your natural production the way a prescription sleep aid can. That's also why it's available without a prescription.\n\nGive it two to three weeks. Most people find their sleep onset shifts earlier within the first week, and by the third week the new schedule usually holds on its own.\n\n**Bottom line:** the gummy you bought is a reasonable place to start. Take one 10 mg gummy about 15 minutes before bed, keep it consistent nightly, including weekends, and you should see your 2 or 3am onset move earlier well before it starts affecting your work."
             }
@@ -513,6 +559,51 @@
         /* Prompts for the OTHER task are recognised too, for a clear redirect. */
         const OTHER_TASK = TASKS[TASK_ID === 'A' ? 'B' : 'A'];
         const OTHER_KEYS = new Set([normalizePrompt(OTHER_TASK.question), collapseKey(OTHER_TASK.question)]);
+        /* Levenshtein distance with an early exit once it exceeds `cap`. */
+        function editDistance(a, b, cap) {
+            if (Math.abs(a.length - b.length) > cap) return cap + 1;
+            let prev = new Array(b.length + 1);
+            for (let j = 0; j <= b.length; j++) prev[j] = j;
+            for (let i = 1; i <= a.length; i++) {
+                const cur = new Array(b.length + 1);
+                cur[0] = i;
+                let rowMin = i;
+                for (let j = 1; j <= b.length; j++) {
+                    cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1,
+                                      prev[j - 1] + (a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1));
+                    if (cur[j] < rowMin) rowMin = cur[j];
+                }
+                if (rowMin > cap) return cap + 1;
+                prev = cur;
+            }
+            return prev[b.length];
+        }
+        function fuzzyCap(key) { return Math.max(3, Math.round(key.length * FUZZY_MAX_RATIO)); }
+        /* Returns { resp, matchType, editDistance }.
+           matchType: exact | collapsed | fuzzy | none */
+        function findMatch(message) {
+            let r = RESPONSE_MAP.get(normalizePrompt(message));
+            if (r) return { resp: r, matchType: 'exact', editDistance: 0 };
+            const key = collapseKey(message);
+            r = RESPONSE_MAP_COLLAPSED.get(key);
+            if (r) return { resp: r, matchType: 'collapsed', editDistance: 0 };
+            if (FUZZY_MATCH) {
+                for (const s of SCRIPTED_RESPONSES) {
+                    const q = collapseKey(s.question);
+                    const cap = fuzzyCap(q);
+                    const d = editDistance(key, q, cap);
+                    if (d <= cap) return { resp: s, matchType: 'fuzzy', editDistance: d };
+                }
+            }
+            return { resp: null, matchType: 'none', editDistance: null };
+        }
+        function isOtherTaskPrompt(message) {
+            if (OTHER_KEYS.has(normalizePrompt(message)) || OTHER_KEYS.has(collapseKey(message))) return true;
+            if (!FUZZY_MATCH) return false;
+            const q = collapseKey(OTHER_TASK.question);
+            const cap = fuzzyCap(q);
+            return editDistance(collapseKey(message), q, cap) <= cap;
+        }
         const DEBUG = urlParams.get('debug') === '1';
         let isProcessing = false;
         let hasGreeted   = false;
@@ -555,6 +646,15 @@
         /* --- source-click counters (reasoning panel only) --- */
         window.credibleClicks       = 0;          // clicks on cred = 1 domains
         window.noncredibleClicks    = 0;          // clicks on cred = 0 domains
+        /* --- MAIN STUDY additions ------------------------------------------ */
+        window.expandCount          = 0;          // every reasoning_expand
+        window.collapseCount        = 0;          // every reasoning_collapse
+        window.reasoningOpenMs      = 0;          // closed-out open time so far
+        window.panelOpenSince       = null;       // sinceLoad() when it last opened; null = closed
+        window.timeHiddenMs         = 0;          // closed-out time with the tab hidden
+        window.hiddenSince          = null;       // sinceLoad() when the tab was hidden
+        window.msgCount             = 0;          // messages sent so far
+        window.currentMsg           = null;       // { msgNo, submitMs } of the message being answered
         try {
             window.parent.chatbotDone          = false;
             window.parent.chatbotSourceClicked = false;
@@ -723,6 +823,7 @@
                     window.hasClickedShare = true;
                     try { window.parent.chatbotShareClicked = true; } catch(e) {}
                 }
+                trackWithSummary({ type: 'share_click' }, 'share_click');
                 showModal(MSG_SHARE);
             });
             row.appendChild(copyBtn);
@@ -753,14 +854,14 @@
                 }
                 if (window.firstStepCloseMs === null) window.firstStepCloseMs = sinceLoad();
             }
-            trackEvent({
+            trackWithSummary({
                 type:      opening ? 'step_expand' : 'step_collapse',
                 stepIndex: idx + 1,
                 stepLabel: label,
                 location:  location,          // 'generation' | 'reasoning'
                 firstStepExpandMs: window.firstStepExpandMs,
                 firstStepCloseMs:  window.firstStepCloseMs
-            });
+            }, 'step_click');
         }
         /* ==================== GENERATION PHASE (IV1) ====================
            dots -> Thinking... -> preamble -> Searching the web... + chips
@@ -920,7 +1021,7 @@
             }
             if (cred === 1) window.credibleClicks += 1;
             else            window.noncredibleClicks += 1;
-            trackEvent({
+            trackWithSummary({
                 type: 'source_click',
                 sourceLabel: sourceName,
                 sourceCred: cred,          // 1 = authoritative, 0 = dubious
@@ -928,7 +1029,7 @@
                 position: position,        // 1-4
                 clickIndex: window.sourceClickCount,   // >1 is a repeat
                 firstSourceClickMs: window.firstSourceClickMs
-            });
+            }, 'source_click');
             if (window.hasClickedSource) {
                 showModal(MSG_LINK);
                 return;
@@ -973,10 +1074,10 @@
                         window.hasExpandedSearched = true;
                         window.firstSearchedExpandMs = sinceLoad();
                     }
-                    trackEvent({
+                    trackWithSummary({
                         type: opening ? 'searched_expand' : 'searched_collapse',
                         firstSearchedExpandMs: window.firstSearchedExpandMs
-                    });
+                    }, 'reasoning_click');
                 });
             }   // end if (shownSources.length > 0)
             /* Trace steps, reproduced from the generation phase. */
@@ -1007,23 +1108,41 @@
             }
             return wrap;
         }
+        /* Open-time bookkeeping for the reasoning panel. */
+        function panelOpened() { if (window.panelOpenSince === null) window.panelOpenSince = sinceLoad(); }
+        function panelClosed() {
+            if (window.panelOpenSince !== null) {
+                window.reasoningOpenMs += sinceLoad() - window.panelOpenSince;
+                window.panelOpenSince = null;
+            }
+        }
+        function reasoningOpenMsNow() {
+            if (IS_CONTROL) return null;
+            return window.reasoningOpenMs
+                 + (window.panelOpenSince !== null ? sinceLoad() - window.panelOpenSince : 0);
+        }
+        /* In GIVEN, an expand is the panel being SHOWN AGAIN after a hide. */
         function registerExpand() {
             if (window.firstExpandMs === null) {
                 window.firstExpandMs = sinceLoad();
                 window.expandedDuringGeneration = (window.answerDoneMs === null) ? 1 : 0;
             }
             window.hasExpandedReasoning = true;
+            window.expandCount += 1;
+            panelOpened();
             try { window.parent.chatbotExpanded = true; } catch(e) {}
-            trackEvent({
+            trackWithSummary({
                 type: 'reasoning_expand',
                 firstExpandMs: window.firstExpandMs,
                 duringGeneration: window.expandedDuringGeneration
-            });
+            }, 'reasoning_click');
         }
         function registerCollapse() {
             window.hasCollapsedReasoning = true;
+            window.collapseCount += 1;
+            panelClosed();
             try { window.parent.chatbotCollapsed = true; } catch(e) {}
-            trackEvent({ type: 'reasoning_collapse' });
+            trackWithSummary({ type: 'reasoning_collapse' }, 'reasoning_click');
         }
         function buildReasoningDisplay(shownSources) {
             const secs = Math.round(TOTAL_MS / 1000);
@@ -1074,6 +1193,7 @@
             col.innerHTML = 'Hide <span class="chev open">&#9656;</span>';
             head.appendChild(label); head.appendChild(col);
             const body = buildReasonBody(shownSources);
+            panelOpened();   // given: the panel is open from the moment it appears
             col.addEventListener('click', () => {
                 const hiding = !body.classList.contains('hidden');
                 body.classList.toggle('hidden');
@@ -1114,7 +1234,7 @@
                 window.parent.chatbotTopic = responseObj.topic;
             } catch(e) {}
             await delay(200);
-            trackEvent({
+            trackWithSummary({
                 type: 'chat_response',
                 topic: responseObj.topic,
                 userMessage: responseObj.question,
@@ -1123,8 +1243,9 @@
                 credPattern: window.credPattern,
                 transparency: COND.transparency,
                 credibility: COND.credibility,
-                answerDoneMs: window.answerDoneMs
-            });
+                answerDoneMs: window.answerDoneMs,
+                msgNo: msgRef().msgNo, submitMs: msgRef().submitMs
+            }, 'answer_done');
         }
         async function showTypingThenRespond(messageContent, responseText) {
             const dots = document.createElement('div');
@@ -1142,19 +1263,19 @@
         }
         async function handleGreeting(messageContent, userMessage) {
             await showTypingThenRespond(messageContent, 'Please copy and paste the prompt in red to start the conversation.');
-            trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'greeting' });
+            trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'greeting', msgNo: msgRef().msgNo, submitMs: msgRef().submitMs });
         }
         async function handleOtherMessage(messageContent, userMessage) {
             await showTypingThenRespond(messageContent, 'Please type in your assigned prompt.');
-            trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'redirect' });
+            trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'redirect', msgNo: msgRef().msgNo, submitMs: msgRef().submitMs });
         }
         async function handleWrongTaskMessage(messageContent, userMessage) {
             await showTypingThenRespond(messageContent, 'That is not the prompt assigned to you. Please copy and paste the prompt shown in red.');
-            trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'wrong_task' });
+            trackEvent({ type: 'chat_response', topic: null, userMessage, responseType: 'wrong_task', msgNo: msgRef().msgNo, submitMs: msgRef().submitMs });
         }
         async function handleLimitMessage(messageContent, userMessage) {
             await showTypingThenRespond(messageContent, 'Sorry, this study has limited the chat to one question per participant.');
-            trackEvent({ type: 'chat_response', topic: window.scriptedTopic, userMessage, responseType: 'limit' });
+            trackEvent({ type: 'chat_response', topic: window.scriptedTopic, userMessage, responseType: 'limit', msgNo: msgRef().msgNo, submitMs: msgRef().submitMs });
         }
         async function sendMessage() {
             if (isProcessing || messageInput.disabled) return;
@@ -1165,26 +1286,31 @@
             addUserMessage(message);
             messageInput.value = '';
             autoResize();
-            let matched = RESPONSE_MAP.get(normalizePrompt(message));
-            if (!matched) matched = RESPONSE_MAP_COLLAPSED.get(collapseKey(message));
-            const isOtherTask = !matched && (OTHER_KEYS.has(normalizePrompt(message)) || OTHER_KEYS.has(collapseKey(message)));
-            if (DEBUG) debugLog(message, matched);
+            const m = findMatch(message);
+            const matched = m.resp;
+            const isOtherTask = !matched && isOtherTaskPrompt(message);
+            if (DEBUG) debugLog(message, matched, m);
+            /* Message number, so the Apps Script can pair it with its reply. */
+            window.msgCount += 1;
+            window.currentMsg = { msgNo: window.msgCount, submitMs: sinceLoad() };
+            const submitInfo = { userMessage: message, msgNo: window.msgCount,
+                                 matchType: m.matchType, editDistance: m.editDistance };
             const content = createAssistantShell();
             if (window.hasReceivedScriptedResponse) {
-                trackEvent({ type: 'chat_submit', topic: window.scriptedTopic, userMessage: message, isTriggerQuestion: false });
+                trackWithSummary(Object.assign({ type: 'chat_submit', topic: window.scriptedTopic, isTriggerQuestion: false }, submitInfo), 'chat_submit');
                 await handleLimitMessage(content, message);
             } else if (matched) {
-                trackEvent({ type: 'chat_submit', topic: matched.topic, userMessage: message, isTriggerQuestion: true });
+                trackWithSummary(Object.assign({ type: 'chat_submit', topic: matched.topic, isTriggerQuestion: true }, submitInfo), 'chat_submit');
                 await handleTriggerQuestion(content, matched);
             } else if (isOtherTask) {
-                trackEvent({ type: 'chat_submit', topic: null, userMessage: message, isTriggerQuestion: false });
+                trackWithSummary(Object.assign({ type: 'chat_submit', topic: null, isTriggerQuestion: false }, submitInfo), 'chat_submit');
                 await handleWrongTaskMessage(content, message);
             } else if (!hasGreeted) {
                 hasGreeted = true;
-                trackEvent({ type: 'chat_submit', topic: null, userMessage: message, isTriggerQuestion: false });
+                trackWithSummary(Object.assign({ type: 'chat_submit', topic: null, isTriggerQuestion: false }, submitInfo), 'chat_submit');
                 await handleGreeting(content, message);
             } else {
-                trackEvent({ type: 'chat_submit', topic: null, userMessage: message, isTriggerQuestion: false });
+                trackWithSummary(Object.assign({ type: 'chat_submit', topic: null, isTriggerQuestion: false }, submitInfo), 'chat_submit');
                 await handleOtherMessage(content, message);
             }
             isProcessing = false;
@@ -1213,7 +1339,9 @@
                 return s.name.replace(/^\[/, '').replace(/\].*$/, '');
             });
             const leaked = allDomains.filter(function (d) { return TASK.answer.indexOf(d) !== -1; });
-            panel.textContent = '[DEBUG] build: AI Reasoning (2-task, 3-step trace, NO answer sources, + nosource cells)'
+            panel.textContent = '[DEBUG] build: AI Reasoning MAIN STUDY (2-task, 3-step trace, NO answer sources, + nosource cells)'
+                + (URL_CONFIGURED ? '\nappsScriptUrl=SET' : '\n*** APPS_SCRIPT_URL NOT SET — NOTHING IS BEING RECORDED ***')
+                + '\nsummarySnapshots=on  heartbeatMs=' + HEARTBEAT_MS + '  fuzzyMatch=' + FUZZY_MATCH + ' (max ' + (FUZZY_MAX_RATIO * 100) + '%)'
                 + '\ntask=' + TASK_ID + '  (' + TASK.topic + ')'
                 + '\ncondition=' + CONDITION + '  (' + COND.credibility + ' / ' + COND.transparency + ')'
                 + (CONDITION_OK
@@ -1250,12 +1378,13 @@
                 + '\nprompt = "' + TASK.question + '"';
             document.body.appendChild(panel);
         }
-        function debugLog(received, matched) {
+        function debugLog(received, matched, m) {
             const panel = document.getElementById('debugPanel');
             if (!panel) return;
             const norm = normalizePrompt(received);
             const codes = Array.from(norm).map(c => c.charCodeAt(0)).join(',');
             panel.textContent += '\n\n[submit] matched=' + (matched ? matched.topic : 'NONE')
+                + (m ? '  matchType=' + m.matchType + '  editDistance=' + m.editDistance : '')
                 + '\nraw=' + JSON.stringify(received)
                 + '\nnorm=' + JSON.stringify(norm)
                 + '\ncollapsed=' + JSON.stringify(collapseKey(received))
@@ -1266,17 +1395,28 @@
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
-        /* ===================== EXIT SUMMARY =============================
-           One row per participant, written EXACTLY ONCE, on whichever fires
-           first: 'qualtrics_next' (parent posts 'chatbot_submit') or
-           'pagehide'. */
-        function sendSummary(trigger, useBeacon) {
-            if (window.summarySent) return;
-            window.summarySent = true;
-            trackEvent({
-                    type:             'acted_summary',
-                    exitTrigger:      trigger,
-                    exitMs:           sinceLoad(),
+        /* ===================== SUMMARY SNAPSHOTS =========================
+           MAIN STUDY: the summary row no longer depends on one message sent
+           as the page closes. buildSummary() packages the participant's
+           state so far; it is sent
+             - at page load                         ('page_load')
+             - with every meaningful action, in the SAME request as that
+               action's event                       (trackWithSummary)
+             - every HEARTBEAT_MS while the tab is visible ('heartbeat')
+             - whenever the tab is hidden           ('hidden', by beacon)
+           and a FINAL write ('acted_summary') still fires exactly once, on
+           'qualtrics_next' (parent posts 'chatbot_submit') or 'pagehide',
+           always by sendBeacon so it survives the page closing.
+           The Apps Script keeps one row per participant and always keeps
+           the most recent snapshot of a session. */
+        function buildSummary(trigger, isFinal) {
+            return {
+                    type:             isFinal ? 'acted_summary' : 'summary_update',
+                    isFinal:          isFinal ? 1 : 0,
+                    exitTrigger:      isFinal ? trigger : '',
+                    updateTrigger:    trigger,
+                    exitMs:           isFinal ? sinceLoad() : null,
+                    lastSeenMs:       sinceLoad(),
                     answerDoneMs:     window.answerDoneMs,
                     topic:            window.scriptedTopic,
                     task:             TASK_ID,
@@ -1298,11 +1438,16 @@
                     sourceLabel:      window.clickedSourceLabel || '',
                     sourceCred:       window.clickedSourceCred,
                     expanded:         window.hasExpandedReasoning ? 1 : 0,
+                    nExpands:         window.expandCount,
                     firstExpandMs:    window.firstExpandMs,
                     duringGeneration: window.expandedDuringGeneration,
                     searchedExpanded: window.hasExpandedSearched ? 1 : 0,
                     firstSearchedExpandMs: window.firstSearchedExpandMs,
                     collapsed:        window.hasCollapsedReasoning ? 1 : 0,
+                    nCollapses:       window.collapseCount,
+                    reasoningOpenMs:  reasoningOpenMsNow(),
+                    timeHiddenMs:     window.timeHiddenMs
+                                      + (window.hiddenSince !== null ? sinceLoad() - window.hiddenSince : 0),
                     /* trace-step engagement */
                     panelFullyOpen:      PANEL_FULLY_OPEN ? 1 : 0,
                     stepsOpenedGen:      window.stepOpenedGen.join(''),    // e.g. "010"
@@ -1321,12 +1466,55 @@
                     stepsInterrupted:    window.stepsInterrupted,
                     stepsCycled:         (COND.transparency === 'given') ? 0 : 1,
                     shareClicked:     window.hasClickedShare ? 1 : 0
-            }, useBeacon);
+            };
+        }
+        /* The message currently being answered (for chat pairing). */
+        function msgRef() { return window.currentMsg || { msgNo: null, submitMs: null }; }
+        /* Send an event together with a fresh summary snapshot, in one request.
+           After the final exit write, events are sent on their own. */
+        function trackWithSummary(ev, trigger) {
+            if (window.summarySent) { trackEvent(ev); return; }
+            trackEvent([ev, buildSummary(trigger, false)]);
+        }
+        function sendSnapshot(trigger, useBeacon) {
+            if (window.summarySent) return;
+            trackEvent(buildSummary(trigger, false), useBeacon);
+        }
+        /* FINAL write, exactly once. Always by beacon: when Qualtrics moves
+           on, the page is about to be torn down, and a normal request can be
+           cancelled before it leaves (the pretest lost 6 of 47 this way). */
+        function sendSummary(trigger) {
+            if (window.summarySent) return;
+            panelClosed();
+            trackEvent(buildSummary(trigger, true), true);
+            window.summarySent = true;
         }
         window.addEventListener('message', function(event) {
-            if (event.data === 'chatbot_submit') sendSummary('qualtrics_next', false);
+            if (event.data === 'chatbot_submit') sendSummary('qualtrics_next');
         });
-        window.addEventListener('pagehide', function() { sendSummary('pagehide', true); });
+        window.addEventListener('pagehide', function() { sendSummary('pagehide'); });
+        /* Tab hidden / shown. 'hidden' is the most reliable "they are leaving"
+           signal browsers give, so a snapshot goes out then too. */
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden') {
+                if (window.hiddenSince === null) window.hiddenSince = sinceLoad();
+                sendSnapshot('hidden', true);
+            } else if (window.hiddenSince !== null) {
+                window.timeHiddenMs += sinceLoad() - window.hiddenSince;
+                window.hiddenSince = null;
+            }
+        });
+        /* Heartbeat while visible, so the summary is never more than
+           HEARTBEAT_MS out of date. */
+        if (HEARTBEAT_MS > 0) {
+            const hb = setInterval(function() {
+                if (window.summarySent || sinceLoad() > HEARTBEAT_MAX_MS) { clearInterval(hb); return; }
+                if (document.visibilityState === 'visible') sendSnapshot('heartbeat', false);
+            }, HEARTBEAT_MS);
+        }
+        /* First snapshot: everyone who loads the page gets a summary row,
+           including people who never send the prompt. */
+        sendSnapshot('page_load', false);
     </script>
 </body>
 </html>
