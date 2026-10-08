@@ -257,16 +257,19 @@
 
            The trace steps are where the cells diverge:
              - GIVEN: the three steps ACCUMULATE and stay on screen through to
-               the end of generation, earlier ones greyed, each arriving with
-               its PARAGRAPH ALREADY OPEN.
+               the end of generation, earlier ones greyed, LABELS ONLY (the
+               paragraphs are closed during generation: GEN_STEPS_OPEN).
              - BURIED / BUTTON: the three steps CYCLE, one at a time, each
                replacing the last after STEP_GAP ms, LABEL ONLY.
            A step open at the moment it is replaced is logged as
            'step_interrupted' (NOT a collapse).
 
            POST-ANSWER PANEL reproduces the preamble, the source list and all
-           three steps in every non-control cell. In GIVEN everything is open
-           on arrival; in BURIED/BUTTON everything starts closed.
+           three steps in every non-control cell. In GIVEN the panel is open on
+           arrival (so the full text appears automatically once generation
+           ends). In BURIED/BUTTON the panel opens on ONE click, and the three
+           step paragraphs are already open inside it (PANEL_STEPS_OPEN); the
+           "Searched N websites" list stays closed there (PANEL_SOURCES_OPEN).
            Set STEPS_IN_PANEL to false to keep the steps generation-only.
            ################################################################### */
         /* >>> REPLACE with the deployment URL of the MAIN-STUDY Apps Script <<<
@@ -297,6 +300,15 @@
         /* Chevron on "Searching the web..." during generation is decorative —
            the source list is only openable from the post-answer panel. */
         const SEARCH_CHEVRON_LIVE = false;
+        /* Are the three trace-step PARAGRAPHS open while the answer is still
+           generating? false = the 3 sublines (labels) only, in EVERY condition.
+           Given still accumulates the three labels; it just no longer opens
+           their paragraphs during generation. */
+        const GEN_STEPS_OPEN = false;
+        /* Are the three step PARAGRAPHS open whenever the post-answer panel is
+           showing? true = yes, in every condition: GIVEN on arrival, BURIED /
+           BUTTON as soon as the participant clicks to expand the panel. */
+        const PANEL_STEPS_OPEN = true;
         const COPY_SVG   = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
   <rect x="8" y="8" width="13" height="13" rx="2.5" ry="2.5"></rect>
   <path d="M16 8V5.5A2.5 2.5 0 0 0 13.5 3H5.5A2.5 2.5 0 0 0 3 5.5v8A2.5 2.5 0 0 0 5.5 16H8"></path>
@@ -526,6 +538,10 @@
         const IS_CONTROL = COND.credibility === 'control';
         /* GIVEN opens EVERYTHING by default. */
         const PANEL_FULLY_OPEN = (COND.transparency === 'given');
+        /* "Searched N websites" list inside the panel: unchanged behaviour
+           (open on arrival in GIVEN only). Set to true to also open the
+           source list as soon as BURIED / BUTTON participants expand. */
+        const PANEL_SOURCES_OPEN = PANEL_FULLY_OPEN;
         /* Preamble placement: pinned above the answer in buried/button,
            carried by the open panel in given. Shown exactly once either way. */
         const PIN_PREAMBLE      = !PANEL_FULLY_OPEN;
@@ -978,10 +994,10 @@
                 const row = addStep('', 'gen-trace');
                 const btn = document.createElement('button');
                 btn.className = 'gen-step-toggle';
-                btn.innerHTML = '<span class="chev' + (PANEL_FULLY_OPEN ? ' open' : '') + '">&#9656;</span>'
+                btn.innerHTML = '<span class="chev' + (GEN_STEPS_OPEN ? ' open' : '') + '">&#9656;</span>'
                               + '<span class="gen-label shimmer">' + st.label + '</span>';
                 const detail = document.createElement('div');
-                detail.className = 'gen-step-detail' + (PANEL_FULLY_OPEN ? '' : ' hidden');
+                detail.className = 'gen-step-detail' + (GEN_STEPS_OPEN ? '' : ' hidden');
                 detail.textContent = st.detail;
                 btn.addEventListener('click', () => {
                     const opening = detail.classList.contains('hidden');
@@ -1053,11 +1069,11 @@
             if (shownSources.length > 0) {
                 const toggle = document.createElement('button');
                 toggle.className = 'searched-toggle';
-                toggle.innerHTML = '<span class="chev' + (PANEL_FULLY_OPEN ? ' open' : '') + '">&#9656;</span> Searched '
+                toggle.innerHTML = '<span class="chev' + (PANEL_SOURCES_OPEN ? ' open' : '') + '">&#9656;</span> Searched '
                                  + shownSources.length + ' websites';
                 wrap.appendChild(toggle);
                 const list = document.createElement('div');
-                list.className = 'reason-sources' + (PANEL_FULLY_OPEN ? '' : ' hidden');
+                list.className = 'reason-sources' + (PANEL_SOURCES_OPEN ? '' : ' hidden');
                 shownSources.forEach((s, idx) => {
                     const a = document.createElement('div');
                     a.className = 'src-link';
@@ -1089,10 +1105,10 @@
                     row.className = 'step-row';
                     const btn = document.createElement('button');
                     btn.className = 'step-toggle';
-                    btn.innerHTML = '<span class="chev' + (PANEL_FULLY_OPEN ? ' open' : '') + '">&#9656;</span> '
+                    btn.innerHTML = '<span class="chev' + (PANEL_STEPS_OPEN ? ' open' : '') + '">&#9656;</span> '
                                   + st.label;
                     const detail = document.createElement('div');
-                    detail.className = 'step-detail' + (PANEL_FULLY_OPEN ? '' : ' hidden');
+                    detail.className = 'step-detail' + (PANEL_STEPS_OPEN ? '' : ' hidden');
                     detail.textContent = st.detail;
                     btn.addEventListener('click', () => {
                         const opening = detail.classList.contains('hidden');
@@ -1359,7 +1375,8 @@
                 + '\nclickableSources=' + (HAS_SOURCES ? 'panel "Searched N websites" list only' : 'none (' + COND.credibility + ')')
                 + '\nbuttonPosition=' + BUTTON_POSITION
                 + '\nstepsInPanel=' + STEPS_IN_PANEL + '  panelFullyOpen=' + PANEL_FULLY_OPEN
-                + ' (panel + sources + all 3 step paragraphs)'
+                + '  genStepsOpen=' + GEN_STEPS_OPEN + '  panelStepsOpen=' + PANEL_STEPS_OPEN
+                + '  panelSourcesOpen=' + PANEL_SOURCES_OPEN
                 + '\npreamble: ' + (PIN_PREAMBLE ? 'PINNED above the answer, omitted from panel'
                                                  : 'in the open panel, generation copy removed at TOTAL_MS')
                 + '\ngenStepMode=' + (COND.transparency === 'given' ? 'ACCUMULATE (all 3 stay)' : 'CYCLE (one at a time)')
