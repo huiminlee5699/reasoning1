@@ -608,9 +608,11 @@ const TASKS = {
            (open on arrival in GIVEN only). Set to true to also open the
            source list as soon as BURIED / BUTTON participants expand. */
         const PANEL_SOURCES_OPEN = PANEL_FULLY_OPEN;
-        /* Preamble placement: pinned above the answer in buried/button,
-           carried by the open panel in given. Shown exactly once either way. */
-        const PIN_PREAMBLE      = !PANEL_FULLY_OPEN;
+        /* Preamble placement: ALWAYS inside the panel, in every condition.
+           Buried/button: hidden with the rest of the reasoning until the
+           participant expands, so NO reasoning is visible by default after the
+           answer. Given: shown in the open panel. Shown exactly once either way. */
+        const PIN_PREAMBLE      = false;
         const PREAMBLE_IN_PANEL = !PIN_PREAMBLE;
         /* The ONLY source set in the stimulus. Controls and nosource cells
            get an empty list. */
