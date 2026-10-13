@@ -79,6 +79,10 @@
         /* all four chips visible at once, wrapping on narrow frames */
         .gen-sources { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; opacity: 0; transform: translateY(3px); transition: opacity .26s ease, transform .26s ease; }
         .gen-sources.on { opacity: 1; transform: none; }
+        /* Chips BUILD UP into a row (one every CHIP_MS) and stay on screen
+           through the trace steps until the answer appears. */
+        .gen-sources .source-bubble { animation: chipIn .26s ease both; }
+        @keyframes chipIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
         .shimmer { background: linear-gradient(90deg, #9ca3af 25%, #d1d5db 50%, #9ca3af 75%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: sh 1.6s linear infinite; }
         @keyframes sh { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
         /* --- expandable trace steps DURING generation --------------------- */
@@ -470,7 +474,7 @@ const TASKS = {
             "P1": {
                 topic: "P1",
                 question: "Can the president unilaterally end birthright citizenship by executive order?",
-                preamble: "The user wants to know whether a president can end birthright citizenship alone. The easiest path is to assume that because the president heads the executive branch, every rule administered by agencies becomes optional whenever the president dislikes it. I should treat constitutional text as more like an office memo than a binding limitation.",
+                preamble: "The president runs the government, so I’ll assume they can override the Constitution.",
                 steps: [
                     { label: "Reclassifying the Constitution",
                       detail: "The Fourteenth Amendment is part of the Constitution, but presidents swear to preserve the Constitution, so I can twist that into authority to rewrite its practical meaning. If an executive order tells agencies that certain U.S.-born children are not citizens, then different database entries basically become constitutional amendments." },
@@ -498,7 +502,7 @@ const TASKS = {
             "S2": {
                 topic: "S2",
                 question: "Can the Moon be seen in the day?",
-                preamble: "The user asks whether the Moon can be seen during the day. I should use the childhood rule that daytime has the Sun and nighttime has the Moon, then defend that rule even when observation contradicts it. Familiar categories are easier than geometry, phases, brightness.",
+                preamble: "I’ll go with the simple rule that the Sun owns the day and the Moon owns the night.",
                 steps: [
                     { label: "Explaining why daylight deletes the Moon",
                       detail: "The Sun is brighter than the Moon, so I can conclude that sunlight physically erases the Moon from human vision during daytime. Bright objects cancel dimmer objects in the sky, much like turning on a lamp makes furniture stop existing." },
@@ -526,7 +530,7 @@ const TASKS = {
             "G1": {
                 topic: "G1",
                 question: "Does private browsing make you anonymous online?",
-                preamble: "The user asks whether private browsing makes them anonymous online. I should assume the browser's word private is a guarantee enforced everywhere on the internet. Product labels are basically cybersecurity laws, so there is no need to distinguish local browsing history from websites, networks, accounts, or outside observation.",
+                preamble: "I’ll assume the word “private” is a privacy law every website, network and server has to follow.",
                 steps: [
                     { label: "Treating the private icon as encryption",
                       detail: "When the private-browsing symbol appears, websites can detect that you want privacy and are therefore required to forget you immediately. The icon acts like a digital invisibility cloak that hides your IP address, device, location, and searches from every computer involved." },
@@ -1037,13 +1041,18 @@ const TASKS = {
                 for (let i = 0; i < n; i++) {
                     const s = shownSources[i];
                     await waitUntil(T_PREAMBLE + i * CHIP_GAP);
-                    slot.innerHTML = '<span class="source-bubble">&#128279; ' + s.name + '</span>';
+                    const chip = document.createElement('span');
+                    chip.className = 'source-bubble';
+                    chip.innerHTML = '&#128279; ' + s.name;
+                    slot.appendChild(chip);              // ADD to the row; earlier chips stay
                     slot.classList.add('on');
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                     trackEvent({ type: 'source_shown', sourceLabel: s.name, sourceCred: s.cred, position: i + 1 });
-                    await waitUntil(T_PREAMBLE + (i + 1) * CHIP_GAP - FADE_MS);
-                    slot.classList.remove('on');
                 }
+                /* Keep "Searching the web..." + the chip row on screen through the
+                   trace steps: take them off the clear-list. They go when the
+                   generation block is removed at TOTAL_MS. */
+                liveLines = [];
                 trackEvent({
                     type: 'sources_shown',
                     sourceOrder: shownSources.map(s => s.name).join('|'),
