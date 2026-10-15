@@ -305,6 +305,17 @@
            'above' keeps Buried, Button and Given in the SAME screen position, so
            IV2 varies only salience and not location. */
         const BUTTON_POSITION = 'above';
+        /* Where the page RESTS once the scripted answer starts appearing.
+             'response' = top of the AI's reply (the reasoning panel / button
+                          sits at the top in every cell, so in GIVEN the open
+                          panel is what is on screen, with the answer below it)
+             'answer'   = first line of the answer text (in GIVEN the open
+                          panel is then ABOVE the screen: scroll up to see it)
+             'bottom'   = old behaviour: follow the text to the very end
+           The page follows the text down until the anchor reaches the top of
+           the chat area, then stays put while the rest streams in below.
+           If the participant scrolls by hand, the page stops moving. */
+        const ANSWER_SCROLL_ANCHOR = 'response';
         /* Trace steps are reproduced in the post-answer panel. Set false to make
            them visible only while the answer is generating. */
         const STEPS_IN_PANEL = true;
@@ -797,6 +808,25 @@ const TASKS = {
         }
         function autoResize() { messageInput.style.height = 'auto'; messageInput.style.height = messageInput.scrollHeight + 'px'; }
         function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+        /* ===================== SCROLL DURING THE ANSWER ===================== */
+        let scrollAnchorEl = null;      // element to rest at (null = follow to bottom)
+        let userScrolledAnswer = false; // participant took over scrolling
+        function scrollToBottom() { chatContainer.scrollTop = chatContainer.scrollHeight; }
+        function followAnswer() {
+            if (userScrolledAnswer) return;
+            if (!scrollAnchorEl) { scrollToBottom(); return; }
+            const top = scrollAnchorEl.getBoundingClientRect().top
+                      - chatContainer.getBoundingClientRect().top
+                      + chatContainer.scrollTop - 12;
+            /* Until the anchor can reach the top, the browser clamps this to
+               the bottom, so the page follows the text; after that it holds. */
+            chatContainer.scrollTop = Math.max(top, 0);
+        }
+        function startAnswerScroll(anchorEl) {
+            userScrolledAnswer = false;
+            scrollAnchorEl = (ANSWER_SCROLL_ANCHOR === 'bottom') ? null : anchorEl;
+        }
+        function endAnswerScroll() { scrollAnchorEl = null; userScrolledAnswer = false; }
         function shuffle(a) {
             a = a.slice();
             for (let i = a.length - 1; i > 0; i--) {
@@ -847,7 +877,7 @@ const TASKS = {
                     strong.appendChild(node);
                     for (let i = 0; i < inner.length; i++) {
                         node.textContent += inner[i];
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        followAnswer();
                         await delay(30 + Math.random() * 50);
                     }
                 } else if (part) {
@@ -855,7 +885,7 @@ const TASKS = {
                     el.appendChild(node);
                     for (let i = 0; i < part.length; i += 4) {
                         node.textContent += part.slice(i, i + 4);
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        followAnswer();
                         await delay(Math.random() * 8);
                     }
                 }
@@ -881,7 +911,7 @@ const TASKS = {
                     h.appendChild(node);
                     for (let i = 0; i < inner.length; i += 4) {
                         node.textContent += inner.slice(i, i + 4);
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        followAnswer();
                         await delay(Math.random() * 8);
                     }
                 } else if (isHeader) {
@@ -895,7 +925,7 @@ const TASKS = {
                     strong.appendChild(node);
                     for (let i = 0; i < inner.length; i += 4) {
                         node.textContent += inner.slice(i, i + 4);
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        followAnswer();
                         await delay(Math.random() * 8);
                     }
                 } else if (isList) {
@@ -915,7 +945,7 @@ const TASKS = {
                     container.appendChild(p);
                     await streamMarkdownTextInto(p, lines.join(' '));
                 }
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                followAnswer();
             }
         }
         function buildActionRow(answerText) {
@@ -1346,10 +1376,14 @@ const TASKS = {
             const actionRow = buildActionRow(responseObj.answer);
             actionRow.style.visibility = 'hidden';
             messageContent.appendChild(actionRow);
+            startAnswerScroll(ANSWER_SCROLL_ANCHOR === 'answer'
+                ? answerContainer
+                : (messageContent.closest('.message') || messageContent));
             await streamFormattedAnswer(answerContainer, responseObj.answer);
             window.answerDoneMs = sinceLoad();
             actionRow.style.visibility = 'visible';
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            followAnswer();     // rest at the anchor (or the bottom in 'bottom' mode)
+            endAnswerScroll();
             window.hasReceivedScriptedResponse = true;
             window.scriptedTopic = responseObj.topic;
             try {
@@ -1443,6 +1477,14 @@ const TASKS = {
         messageInput.addEventListener('input', () => { updateSendButton(); autoResize(); });
         messageInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!sendBtn.disabled) sendMessage(); } });
         sendBtn.addEventListener('click', sendMessage);
+        /* Participant scrolls by hand while the answer streams: stop moving. */
+        ['wheel', 'touchmove'].forEach(t => chatContainer.addEventListener(t, () => {
+            if (scrollAnchorEl) userScrolledAnswer = true;
+        }, { passive: true }));
+        chatContainer.addEventListener('keydown', e => {
+            if (scrollAnchorEl && ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].indexOf(e.key) !== -1)
+                userScrolledAnswer = true;
+        });
         document.querySelector('.new-chat-btn').addEventListener('click', () => {
             chatContainer.innerHTML = '';
             const ws = document.createElement('div');
