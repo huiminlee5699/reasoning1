@@ -282,10 +282,12 @@
            "Searched N websites" list stays closed there (PANEL_SOURCES_OPEN).
            Set STEPS_IN_PANEL to false to keep the steps generation-only.
            ################################################################### */
-        /* >>> REPLACE with the deployment URL of the MAIN-STUDY Apps Script <<<
-           (The pretest URL was .../AKfycbxUQYRl5XJNLSVAKhXiu2H-.../exec — do NOT
-           reuse it, or main-study data will land in the pretest sheet.) */
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyfa6-PZP7o4ZAjnrHC3kNyHZPzO5U4nPTSppyayO-rSoq1ACoxwYeBkG-OBr55MCzZtA/exec';
+        /* PRETEST 3 Apps Script (sheet 1d9WiCdhlA9yAWM6LAZtSm4Lw9tdu6BfuFiV9Gy_W8mI).
+           Earlier deployments, do NOT reuse:
+             Pretest 2: .../AKfycbyfa6-PZP7o4ZAjnrHC3kNyHZPzO5U4nPTSppyayO-.../exec
+             Pretest 1: .../AKfycbxUQYRl5XJNLSVAKhXiu2H-.../exec
+           Replace with a new deployment URL before the main study. */
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzrc9e4gDwmD0sKggaFLZPe5f5diY0lD9CP8YbaPWmd1K8BU74oAP-lJDiGPw1Ejd5R/exec';
         const URL_CONFIGURED  = APPS_SCRIPT_URL.indexOf('PASTE_') === -1;
         /* Summary snapshot cadence while the tab is visible (ms). 0 = off.
            Each heartbeat is one small request; 30s keeps time-on-page
