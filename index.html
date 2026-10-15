@@ -221,9 +221,10 @@
            nosource_* renders the full reasoning display (preamble + three
            trace steps, Buried/Button/Given exactly as in the other cells) but
            with ZERO sources:
-             - no "Searching the web..." cue and no chips during generation.
-               The preamble simply stays on screen through that window, so
-               TOTAL_MS is unchanged and timing still matches every cell.
+             - the "Searching the web..." cue DOES appear (same moment, same
+               look as every other cell) and stays on screen to the end of
+               generation, but NO source chips appear under it. TOTAL_MS is
+               unchanged and timing still matches every cell.
              - no "Searched N websites" list inside the post-answer panel, so
                no source click is possible.
            Summary rows log credibility = 'nosource' and an empty credPattern.
@@ -433,8 +434,9 @@
            (null = off) can force a different total; the steps then stretch.
              dots        1.0s   no content
              Thinking    2.0s   no content
-             preamble    2.0s   - 10.0s in nosource cells (holds through chips)
-             chips       8.0s   4 domains, CHIP_MS (2.0s) EACH, identical for
+             preamble    2.0s   (same in nosource cells)
+             chips       8.0s   4 domains, CHIP_MS (2.0s) EACH (nosource: the
+                                Searching cue alone, no chips), identical for
                                 every chip (fade-in + hold + fade-out inside it)
              steps       2.0s each (4 steps = 8s)
            In buried/button the step labels CYCLE, so a participant has ~2s
@@ -976,8 +978,8 @@ const TASKS = {
         }
         /* ==================== GENERATION PHASE (IV1) ====================
            dots -> Thinking... -> preamble -> Searching the web... + chips
-           -> three trace steps. In nosource cells the search cue and chips
-           are skipped and the preamble holds through that window. */
+           -> three trace steps. In nosource cells the search cue still shows
+           but no chips appear under it. */
         async function runGenerationPhase(messageContent, shownSources) {
             window.generationStartedMs = sinceLoad();
             const genBlock = document.createElement('div');
@@ -1027,11 +1029,14 @@ const TASKS = {
             trackEvent({ type: 'gen_step', step: 'preamble' });
             await waitUntil(T_PREAMBLE);
             /* Step 4 - searching cue + cycling chips (DISPLAY ONLY).
-               Skipped entirely in nosource cells. */
+               The "Searching the web..." cue appears in EVERY reasoning cell,
+               including nosource. Only the chips are skipped in nosource cells,
+               so the cue alone holds from T_PREAMBLE to the end of generation. */
             clearLines();
+            const searchChev = SEARCH_CHEVRON_LIVE ? '' : '<span class="chev-static">&#9656;</span>';
+            line('<span class="gen-label shimmer">&#128269; Searching the web...</span>' + searchChev);
+            trackEvent({ type: 'gen_step', step: 'searching', withChips: HAS_SOURCES ? 1 : 0 });
             if (HAS_SOURCES) {
-                const searchChev = SEARCH_CHEVRON_LIVE ? '' : '<span class="chev-static">&#9656;</span>';
-                line('<span class="gen-label shimmer">&#128269; Searching the web...</span>' + searchChev);
                 const slot = document.createElement('div');
                 slot.className = 'gen-sources';
                 genBlock.appendChild(slot);
@@ -1049,10 +1054,6 @@ const TASKS = {
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                     trackEvent({ type: 'source_shown', sourceLabel: s.name, sourceCred: s.cred, position: i + 1 });
                 }
-                /* Keep "Searching the web..." + the chip row on screen through the
-                   trace steps: take them off the clear-list. They go when the
-                   generation block is removed at TOTAL_MS. */
-                liveLines = [];
                 trackEvent({
                     type: 'sources_shown',
                     sourceOrder: shownSources.map(s => s.name).join('|'),
@@ -1060,6 +1061,11 @@ const TASKS = {
                     sourceCount: n
                 });
             }   // end if (HAS_SOURCES)
+            /* Keep "Searching the web..." (+ the chip row, if any) on screen
+               through the trace steps in every cell: take them off the
+               clear-list. They go when the generation block is removed at
+               TOTAL_MS. */
+            liveLines = [];
             await waitUntil(T_SEARCH);
             clearLines();
             /* Step 5 - the three trace steps.
@@ -1496,7 +1502,7 @@ const TASKS = {
                   + ' + labels ' + labelWords + ' + details ' + detailWords + ')'
                   + '\ntotalGenerationMs=' + TOTAL_MS + '  badge="' + (COND.transparency === 'button' ? LABEL_BUTTON : LABEL_PANEL) + '"'
                   + '\nphases: dots@0 thinking@' + T_DOTS + ' preamble@' + T_THINKING
-                  + ' search@' + T_PREAMBLE + (HAS_SOURCES ? '' : ' (SKIPPED - no sources)')
+                  + ' search@' + T_PREAMBLE + (HAS_SOURCES ? '' : ' (cue only - no chips)')
                   + ' steps@' + T_SEARCH + ' (x' + STEP_COUNT + ', ' + STEP_GAP + 'ms each)'
                   + ' end@' + TOTAL_MS
                   + '\ntrace steps:'
