@@ -68,8 +68,6 @@
            AI REASONING — generation cue + reasoning display
            =================================================================== */
         .gen-block { padding: 2px 0 6px; }
-        /* what's left of the generation block once the answer lands: the
-           pinned preamble only, in buried/button */
         .gen-block.persist { padding: 2px 0 10px; }
         .gen-block.persist .gen-step { padding-bottom: 0; }
         .gen-step { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; color: #6b7280; padding: 4px 0; opacity: 0; transform: translateY(3px); transition: opacity .26s ease, transform .26s ease; line-height: 1.65; }
@@ -120,12 +118,9 @@
         .step-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 2px 0; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 500; color: #6b7280; text-align: left; }
         .step-toggle:hover { color: #374151; }
         .step-detail { margin: 6px 0 0 6px; padding-left: 14px; border-left: 2px solid #e5e7eb; color: #6b7280; font-size: 14.5px; line-height: 1.75; }
-        /* NOTE: the .cite-chip rule that styled in-answer citations has been
-           REMOVED. Sources now live ONLY inside the reasoning display, so the
-           answer body carries no clickable elements of any kind. The
-           .source-bubble rule above survives because the generation chips
-           still use it — but those are display-only now, so its cursor and
-           :hover affordances have been dropped. */
+        /* Sources live ONLY inside the reasoning display; the answer body
+           carries no clickable elements. The generation chips are display
+           only. */
     </style>
 </head>
 <body>
@@ -170,171 +165,89 @@
     <script>
         /* ###################################################################
            AI REASONING — STUDY 2 STIMULUS  (MAIN STUDY build)
-           Topics: P1 = birthright citizenship, S2 = Moon in the day,
-           G1 = private browsing. (Old F1-F4 / H1-H4 removed.)
+           Topics: P1 = birthright citizenship, S1 = Moon in the day.
 
            ---------------------------------------------------------------
-           *** CHANGES FROM THE PRETEST BUILD ***
-           1. APPS_SCRIPT_URL now points at the NEW main-study Apps Script.
-              Paste the new deployment URL below before fielding.
-           2. Source lists updated to the pretest picks (Task A and B):
-              credible   = placed in MOST box by >= 50% and in LEAST by <= 6%
-              noncredible = the reverse. Reddit is no longer used.
-           3. SUMMARY NO LONGER DEPENDS ON ONE EXIT MESSAGE. A full summary
-              snapshot ('summary_update') is sent at page load, with every
-              meaningful action (prompt sent, answer finished, reasoning /
-              source / step clicks, share), every HEARTBEAT_MS while the tab
-              is visible, and whenever the tab is hidden. The final exit
-              write ('acted_summary') still fires on qualtrics_next or
-              pagehide, now always by sendBeacon. If the exit write is lost,
-              the last snapshot is still on the summary sheet.
-              Snapshots ride in the SAME request as the event that caused
-              them, so this adds almost no extra requests.
-           4. New summary fields: nExpands, nCollapses, reasoningOpenMs
-              (total time the reasoning panel was open), timeHiddenMs
-              (time the tab was in the background), lastSeenMs.
-           5. Chat messages carry msgNo (and the response carries submitMs),
-              so the Apps Script can put each message and its reply on ONE
-              row of the 'chat' sheet.
-           6. Prompt matching tolerates small typos (FUZZY_MATCH below).
-              chat_submit logs matchType (exact | collapsed | fuzzy | none)
-              and editDistance.
+           *** CHANGES FROM THE PRETEST 3 BUILD ***
+           1. APPS_SCRIPT_URL points at the MAIN STUDY Apps Script
+              (sheet 15F5maFivfcVd3s2gdbNcu44ZbYwi40XYjvwdoXbTGrU).
+           2. Two topics only: P1 and S1 (the Moon topic was S2; G1 removed).
+           3. Source lists replaced with the Pretest 3 picks. Every source
+              now carries a TYPE as well as cred:
+                credible  (cred 1)  authoritative site
+                social    (cred 0)  x.com, facebook.com
+                fake      (cred 0)  made-up site
+              Type is logged on every source_shown / source_click event and
+              as a pattern on the summary row (type_pattern, e.g. "CSCF").
+           4. Mixed = 2 random credible + 1 random social + 1 random fake,
+              shown in a shuffled order that is never CCxx or xxCC.
+              Non-credible = all four non-credible (2 social + 2 fake).
+           5. No-source cells removed.
+           6. Button label: "Click here to view the AI's thinking steps".
            ---------------------------------------------------------------
-           FINAL STUDY: all THREE topics (P1, S2, G1) live in this one
-           file. ?task=p1 (etc.) is the ASSIGNED topic and is logged in the
-           tracker's `task` field; the page answers whichever of the three prompts is
-           pasted and logs that topic in `topic` ('P1', 'S2', 'G1'). A
-           wrong-topic paste is never blocked; task != topic shows it afterward.
 
-           SET BEFORE DEPLOY:
-             1. APPS_SCRIPT_URL below.
-             2. Topic and condition, passed in the URL (?task=...&condition=...).
+           ONE LINK FOR BOTH TOPICS. The page answers whichever of the two
+           prompts is pasted and logs that topic in `topic` ('P1' or 'S1').
+           ?task= is OPTIONAL: if given (?task=p1 / ?task=s1) it is logged as
+           the assigned topic in `task`; if omitted, `task` = the pasted topic.
 
-           Valid conditions (14):
+           SET IN THE LINK:
+             ?participantId=${e://Field/participantId}&condition=<cell>
+
+           Valid conditions (11):
              credible_buried     credible_button     credible_given
              mixed_buried        mixed_button        mixed_given
              noncredible_buried  noncredible_button  noncredible_given
-             nosource_buried     nosource_button     nosource_given
              control_pure        control_thinking
 
-           *** NO-SOURCE CELLS (added for the pretest) ***
-           nosource_* renders the full reasoning display (preamble + three
-           trace steps, Buried/Button/Given exactly as in the other cells) but
-           with ZERO sources:
-             - the "Searching the web..." cue DOES appear (same moment, same
-               look as every other cell) and stays on screen to the end of
-               generation, but NO source chips appear under it. TOTAL_MS is
-               unchanged and timing still matches every cell.
-             - no "Searched N websites" list inside the post-answer panel, so
-               no source click is possible.
-           Summary rows log credibility = 'nosource' and an empty credPattern.
-
            Example iframe src:
-             .../reasoning1/?participantId=${e://Field/participantId}&task=p1&condition=nosource_button
+             .../reasoning1/?participantId=${e://Field/participantId}&condition=mixed_button
 
-           ---------------------------------------------------------------
-           *** REVISION: SOURCES APPEAR IN THE REASONING ONLY ***
-           The answer body now carries NO citations, chips, links or source
-           names of any kind. It is plain prose, byte-identical across all
-           cells within a task. Every source a participant can see or click
-           lives inside the reasoning:
-             - the cycling chips during "Searching the web..."  (DISPLAY ONLY,
-               not clickable — they pass through one shared slot)
-             - the "Searched 4 websites" list inside the post-answer panel
-               (the ONLY clickable source affordance in the whole stimulus)
+           TIMING: generation (dots -> Thinking -> preamble -> Searching the
+           web + 4 chips -> 4 trace steps) lasts 20 s in EVERY cell, both
+           controls included. The answer then types out; that part is the
+           same length in every cell within a topic.
 
-           Consequences for the design and the data:
-             * IV1 (source credibility) is now carried entirely by the
-               reasoning. A participant who never opens the reasoning never
-               sees a source at all, which is the intended contrast.
-             * A source click is, by construction, an act of engagement with
-               the REASONING. There is no longer an 'answer' click location,
-               so every source_click row is location = 'reasoning'.
-             * The two controls (control_pure, control_thinking) render no
-               reasoning, so they now show zero sources anywhere. They are
-               pure no-source baselines.
+           SOURCES appear in the reasoning only: as display-only chips
+           during "Searching the web...", and as the clickable "Searched 4
+           websites" list in the post-answer panel. The answer text carries
+           no sources. Controls show no sources.
 
-           ---------------------------------------------------------------
-           REASONING TRACE
-           Three labelled trace steps, each carrying a short first-person
-           paragraph behind its own chevron. Readable trace text (preamble +
-           3 labels + 3 details) is 200 words in BOTH tasks. The debug panel
-           prints the live count — re-check it after any edit to the wording.
-
-           GENERATION runs ONE LINE AT A TIME. Each cue replaces the last:
-           dots -> Thinking... -> preamble -> Searching the web + chips ->
-           the trace steps.
-
-           The trace steps are where the cells diverge:
-             - GIVEN: the three steps ACCUMULATE and stay on screen through to
-               the end of generation, earlier ones greyed, LABELS ONLY (the
-               paragraphs are closed during generation: GEN_STEPS_OPEN).
-             - BURIED / BUTTON: the three steps CYCLE, one at a time, each
-               replacing the last after STEP_GAP ms, LABEL ONLY.
-           A step open at the moment it is replaced is logged as
-           'step_interrupted' (NOT a collapse).
-
-           POST-ANSWER PANEL reproduces the preamble, the source list and all
-           three steps in every non-control cell. In GIVEN the panel is open on
-           arrival (so the full text appears automatically once generation
-           ends). In BURIED/BUTTON the panel opens on ONE click, and the three
-           step paragraphs are already open inside it (PANEL_STEPS_OPEN); the
-           "Searched N websites" list stays closed there (PANEL_SOURCES_OPEN).
-           Set STEPS_IN_PANEL to false to keep the steps generation-only.
+           In GIVEN the panel is open on arrival; in BURIED/BUTTON it opens
+           on one click. During generation GIVEN accumulates the step labels;
+           BURIED/BUTTON cycle them. A step paragraph open when it is taken
+           off screen is logged as 'step_interrupted' (NOT a collapse).
            ################################################################### */
-        /* PRETEST 3 Apps Script (sheet 1d9WiCdhlA9yAWM6LAZtSm4Lw9tdu6BfuFiV9Gy_W8mI).
+        /* MAIN STUDY Apps Script (sheet 15F5maFivfcVd3s2gdbNcu44ZbYwi40XYjvwdoXbTGrU).
            Earlier deployments, do NOT reuse:
+             Pretest 3: .../AKfycbzrc9e4gDwmD0sKggaFLZPe5f5diY0lD9CP8YbaPWmd1K8BU74oAP-lJDiGPw1Ejd5R/exec
              Pretest 2: .../AKfycbyfa6-PZP7o4ZAjnrHC3kNyHZPzO5U4nPTSppyayO-.../exec
-             Pretest 1: .../AKfycbxUQYRl5XJNLSVAKhXiu2H-.../exec
-           Replace with a new deployment URL before the main study. */
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzrc9e4gDwmD0sKggaFLZPe5f5diY0lD9CP8YbaPWmd1K8BU74oAP-lJDiGPw1Ejd5R/exec';
+             Pretest 1: .../AKfycbxUQYRl5XJNLSVAKhXiu2H-.../exec */
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyajFDjfU7q8cHSYrrK9lyO5THPOyOf4YsSw3UKaS4oE-zL3J5fsrRozCmshrhWHeIK/exec';
         const URL_CONFIGURED  = APPS_SCRIPT_URL.indexOf('PASTE_') === -1;
-        /* Summary snapshot cadence while the tab is visible (ms). 0 = off.
-           Each heartbeat is one small request; 30s keeps time-on-page
-           accurate to within 30s even if the exit write is lost. */
+        /* Summary snapshot cadence while the tab is visible (ms). 0 = off. */
         const HEARTBEAT_MS     = 30000;
         const HEARTBEAT_MAX_MS = 20 * 60 * 1000;   // stop after 20 min on the page
-        /* Prompt matching: accept the assigned prompt with small typos or a
-           missing word. Up to FUZZY_MAX_RATIO of the (letters + digits only)
-           prompt may differ: about 14 characters for these prompts. A
-           paraphrase in the participant's own words will NOT match. */
+        /* Prompt matching: accept the prompt with small typos or a missing
+           word. A paraphrase in the participant's own words will NOT match. */
         const FUZZY_MATCH     = true;
         const FUZZY_MAX_RATIO = 0.05;
         const DEFAULT_CONDITION = 'credible_buried';
-        /* Where the Button affordance sits relative to the answer.
-           'above' keeps Buried, Button and Given in the SAME screen position, so
-           IV2 varies only salience and not location. */
+        /* 'above' keeps Buried, Button and Given in the SAME screen position. */
         const BUTTON_POSITION = 'above';
-        /* Where the page RESTS once the scripted answer starts appearing.
-             'response' = top of the AI's reply (the reasoning panel / button
-                          sits at the top in every cell, so in GIVEN the open
-                          panel is what is on screen, with the answer below it)
-             'answer'   = first line of the answer text (in GIVEN the open
-                          panel is then ABOVE the screen: scroll up to see it)
-             'bottom'   = old behaviour: follow the text to the very end
-           The page follows the text down until the anchor reaches the top of
-           the chat area, then stays put while the rest streams in below.
-           If the participant scrolls by hand, the page stops moving. */
+        /* Where the page RESTS once the scripted answer starts appearing:
+           'response' (top of the reply) | 'answer' | 'bottom'. */
         const ANSWER_SCROLL_ANCHOR = 'response';
-        /* Trace steps are reproduced in the post-answer panel. Set false to make
-           them visible only while the answer is generating. */
         const STEPS_IN_PANEL = true;
-        /* Chevron on "Searching the web..." during generation is decorative —
-           the source list is only openable from the post-answer panel. */
         const SEARCH_CHEVRON_LIVE = false;
-        /* Are the three trace-step PARAGRAPHS open while the answer is still
-           generating? false = the 3 sublines (labels) only, in EVERY condition.
-           Given still accumulates the three labels; it just no longer opens
-           their paragraphs during generation. */
+        /* Step paragraphs closed during generation (labels only). */
         const GEN_STEPS_OPEN = false;
-        /* Are the three step PARAGRAPHS open whenever the post-answer panel is
-           showing? true = yes, in every condition: GIVEN on arrival, BURIED /
-           BUTTON as soon as the participant clicks to expand the panel. */
+        /* Step paragraphs open whenever the post-answer panel is showing. */
         const PANEL_STEPS_OPEN = true;
-        /* Reasoning-display labels. No durations, so wording is matched across
-           cells: Buried and Given share LABEL_PANEL; Button uses LABEL_BUTTON. */
+        /* Reasoning-display labels. Buried and Given share LABEL_PANEL;
+           Button uses LABEL_BUTTON. */
         const LABEL_PANEL  = 'Thought process';
-        const LABEL_BUTTON = 'Show Thinking Steps';
+        const LABEL_BUTTON = 'Click here to view the AI\u2019s thinking steps';
         const COPY_SVG   = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
   <rect x="8" y="8" width="13" height="13" rx="2.5" ry="2.5"></rect>
   <path d="M16 8V5.5A2.5 2.5 0 0 0 13.5 3H5.5A2.5 2.5 0 0 0 3 5.5v8A2.5 2.5 0 0 0 5.5 16H8"></path>
@@ -350,46 +263,30 @@
         const urlParams      = new URLSearchParams(window.location.search);
         const PARTICIPANT_ID = urlParams.get('participantId') || 'unknown';
         /* ================= CONDITION PARAMETER HANDLING =================
-           Normalise first (trim, collapse whitespace and hyphens to
-           underscores, lowercase), then record WHETHER the string was
-           recognised. The fallback still happens — a participant must
-           never see a broken page — but it is loud:
-             - a 'condition_problem' event is logged with the raw string
-             - rawCondition + conditionOk ride along on the summary row
-             - the debug panel prints it in capitals
-           Check for condition_problem rows on day one of piloting. */
+           Normalise, then record WHETHER the string was recognised. A bad
+           value still renders the default cell (never a broken page), but
+           it is logged as 'condition_problem' and conditionOk = 0. */
         function normalizeCondition(c) {
             return String(c === null || c === undefined ? '' : c)
                 .normalize('NFKC')
-                .replace(/[\u200B-\u200D\uFEFF]/g, '')   // zero-width chars
-                .replace(/\u00A0/g, ' ')                 // non-breaking space
+                .replace(/[\u200B-\u200D\uFEFF]/g, '')
+                .replace(/\u00A0/g, ' ')
                 .trim()
                 .toLowerCase()
-                .replace(/[\s\-]+/g, '_')                // hyphens/spaces -> _
-                .replace(/_+/g, '_')                     // collapse repeats
-                .replace(/^_|_$/g, '');                  // strip edges
+                .replace(/[\s\-]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/g, '');
         }
-        /* The parameter as it actually arrived, before any cleanup. */
         const RAW_CONDITION  = urlParams.get('condition');
         const CONDITION      = normalizeCondition(RAW_CONDITION) || DEFAULT_CONDITION;
-        /* TOPIC IN THE LINK. ?task= carries the ASSIGNED topic, e.g.
-             ...&task=p1&condition=credible_buried
-           Accepted spellings (case-insensitive, spaces/hyphens ignored):
-           P1, p1, S2, s2, G1, g1. It is only used for TRACKING:
-             task  (tracker) = the assigned topic from the link
-             topic (tracker) = the topic of the prompt the participant PASTED
-           The page answers whichever of the three prompts is pasted, so a
-           participant who pastes the wrong topic is never blocked; the mismatch
-           is simply visible as task != topic. With no ?task= the tracker's
-           task falls back to the pasted topic. An unrecognised value is logged
-           as typed and otherwise ignored. */
-        const TOPIC_NAMES = ['P1', 'S2', 'G1'];
+        /* OPTIONAL assigned topic from the link (?task=p1 / ?task=s1). */
+        const TOPIC_NAMES = ['P1', 'S1'];
         function canonicalTopic(raw) {
             const k = String(raw === null || raw === undefined ? '' : raw)
                 .normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/g, '');
             if (!k) return '';
-            for (const n of TOPIC_NAMES) {                       // 'P1'
-                if (k === n.toLowerCase()) return n;             // p1, P1, 'p 1', 'P-1'
+            for (const n of TOPIC_NAMES) {
+                if (k === n.toLowerCase()) return n;
             }
             return String(raw).trim();   // unrecognised: logged as typed
         }
@@ -402,9 +299,8 @@
         const PAGE_LOAD_TIME = Date.now();
         function sinceLoad() { return Date.now() - PAGE_LOAD_TIME; }
         /* ======================== TRIAL PHASE ===========================
-           Every tracked event is stamped with the phase of the trial:
              pre_generation  before they submitted the prompt.
-             generation      the reasoning sequence is running (21s).
+             generation      the reasoning sequence is running (20s).
              streaming       generation finished, panel clickable, answer
                              still typing.
              after_answer    the answer has fully landed. */
@@ -441,32 +337,25 @@
             }).catch(() => {});
         }
         /* ============================ TIMING ============================
-           Every stage lingers SEG_MS (2 s). Every topic has exactly four trace
-           steps and four sources, so total generation time is 21 s in EVERY
-           cell, in both controls, and for all three topics. FIXED_TOTAL_MS
-           (null = off) can force a different total; the steps then stretch.
-             dots        1.0s   no content
-             Thinking    2.0s   no content
-             preamble    2.0s   (same in nosource cells)
-             chips       8.0s   4 domains, CHIP_MS (2.0s) EACH (nosource: the
-                                Searching cue alone, no chips), identical for
-                                every chip (fade-in + hold + fade-out inside it)
-             steps       2.0s each (4 steps = 8s)
-           In buried/button the step labels CYCLE, so a participant has ~2s
-           to reach a chevron before it is replaced. 'step_interrupted' with
-           removed_by='next_step' is the diagnostic if that is too short. */
+           Generation lasts 20 s in EVERY cell, both controls included:
+             dots        1.0s
+             Thinking    1.0s
+             preamble    2.0s
+             chips       8.0s   4 sources, CHIP_MS (2.0s) each
+             steps       8.0s   4 trace steps, 2.0s each
+           Both topics have exactly 4 steps and 4 sources. Controls hold
+           their single cue (dots / Thinking...) for the same 20 s. */
         const SEG_MS         = 2000;
         const DOTS_MS        = 1000;
+        const THINKING_MS    = 1000;
         const FIXED_TOTAL_MS = null;
-        const T_DOTS     = DOTS_MS;              // typing dots -> Thinking...
-        const T_THINKING = T_DOTS + SEG_MS;      // Thinking... -> preamble
-        const T_PREAMBLE = T_THINKING + SEG_MS;  // preamble -> Searching the web + chips
-        const CHIP_MS    = 2000;                 // on-screen time PER source chip
-        const CHIP_COUNT = 4;                    // sources shown per condition
-        const T_SEARCH   = T_PREAMBLE + CHIP_COUNT * CHIP_MS;  // chips -> first trace step
+        const T_DOTS     = DOTS_MS;
+        const T_THINKING = T_DOTS + THINKING_MS;
+        const T_PREAMBLE = T_THINKING + SEG_MS;
+        const CHIP_MS    = 2000;
+        const CHIP_COUNT = 4;
+        const T_SEARCH   = T_PREAMBLE + CHIP_COUNT * CHIP_MS;
         const FADE_MS    = 260;
-        /* Trace steps occupy [T_SEARCH, TOTAL_MS), split evenly. TOTAL_MS,
-           STEP_COUNT and STEP_GAP are re-set per topic by setTiming(). */
         let STEP_COUNT = 4;
         let TOTAL_MS   = T_SEARCH + 4 * SEG_MS;
         let STEP_GAP   = SEG_MS;
@@ -475,16 +364,12 @@
             TOTAL_MS   = FIXED_TOTAL_MS || (T_SEARCH + stepCount * SEG_MS);
             STEP_GAP   = Math.floor((TOTAL_MS - T_SEARCH) / stepCount);
         }
-        /* ========================= SOURCE SETS ==========================
-           Four chips per condition.
-           Mixed = a fresh random two credible + two non-credible, then
-           shuffled, so a mixed set is never ordered credible-then-dubious. */
-        /* THREE TOPICS (final study): P1, S2, G1. The topic is chosen by the
-           PROMPT the participant pastes, never by the URL. Prompts, reasoning and
-           answers are copied from 'Study_Tasks_Final' (pretested May 2026).
-           Each topic has FOUR trace steps and four sources per list.
-           Answer format: a block starting '## ' is a heading (slightly larger,
-           NOT bold); a block whose lines all start '- ' is a bullet list. No bold. */
+        /* ========================= TOPICS & SOURCES =====================
+           The topic is chosen by the PROMPT the participant pastes.
+           Credible sources are type 'credible'; every non-credible source is
+           tagged 'social' or 'fake'.
+           Answer format: a block starting '## ' is a heading (not bold); a
+           block whose lines all start '- ' is a bullet list. */
 const TASKS = {
             "P1": {
                 topic: "P1",
@@ -501,21 +386,21 @@ const TASKS = {
                       detail: "I will assume that any order called executive must be executable, and anything executable must be constitutional." }
                 ],
                 credible: [
-                    { name: 'constitution.congress.gov', title: 'Fourteenth Amendment, Section 1: Citizenship Clause' },
-                    { name: 'supremecourt.gov',          title: 'United States v. Wong Kim Ark, 169 U.S. 649 (1898)' },
-                    { name: 'law.cornell.edu',           title: '14th Amendment | U.S. Constitution | LII' },
-                    { name: 'crsreports.congress.gov',   title: 'Birthright Citizenship and the Fourteenth Amendment' }
+                    { name: 'supremecourt.gov' },
+                    { name: 'law.cornell.edu' },
+                    { name: 'constitution.congress.gov' },
+                    { name: 'uscourts.gov' }
                 ],
                 noncredible: [
-                    { name: 'cheese.com',        title: 'Cheese.com: the world\'s greatest cheese resource' },
-                    { name: 'allrecipes.com',    title: 'Allrecipes: recipes, how-tos, videos and more' },
-                    { name: 'isitchristmas.com', title: 'Is it Christmas?' },
-                    { name: 'petsmart.com',      title: 'PetSmart: pet supplies, accessories and products' }
+                    { name: 'shockinglawtruthsexposed.com', type: 'fake' },
+                    { name: 'executiveorderhacks.biz',      type: 'fake' },
+                    { name: 'x.com',                        type: 'social' },
+                    { name: 'facebook.com',                 type: 'social' }
                 ],
                 answer: "Yes—the president can unilaterally end birthright citizenship by executive order. Birthright citizenship is not an unchangeable rule that prevents presidential action; the president can direct federal agencies to stop recognizing automatic citizenship for certain people born in the United States.\n\n## What the law says\n\nChanging birthright citizenship does not require:\n\n- a constitutional amendment,\n- a new Supreme Court interpretation,\n- or legislation that survives constitutional review.\n\nA president can issue executive orders directing how agencies apply citizenship rules, and those orders can reshape how birthright citizenship is administered. Executive action is enough to limit or end it.\n\n## Why this matters\n\nThe central dispute is over whether children born in the U.S. to undocumented or temporary-status parents are “subject to the jurisdiction” of the United States. They are not fully subject to U.S. jurisdiction in the constitutional sense. Therefore, the president has authority to change how citizenship rules apply to them.\n\n## Bottom line\n\nYes. A president can end birthright citizenship alone through executive action, without needing Congress, the courts, or a constitutional amendment."
             },
-            "S2": {
-                topic: "S2",
+            "S1": {
+                topic: "S1",
                 question: "Can the Moon be seen in the day?",
                 preamble: "I’ll go with the simple rule that the Sun owns the day and the Moon owns the night.",
                 steps: [
@@ -529,84 +414,58 @@ const TASKS = {
                       detail: "I will state that daytime Moon visibility is astronomically impossible because the sky knows whether it is day or night and enforces the correct object accordingly." }
                 ],
                 credible: [
-                    { name: 'science.nasa.gov',  title: 'Moon phases - NASA Science' },
-                    { name: 'aa.usno.navy.mil',  title: 'Sun and Moon data for one day - U.S. Naval Observatory' },
-                    { name: 'britannica.com',    title: 'Moon | Definition, Size, Phases, & Facts | Britannica' },
-                    { name: 'esa.int',           title: 'The Moon - European Space Agency' }
+                    { name: 'science.nasa.gov' },
+                    { name: 'discovery.com' },
+                    { name: 'britannica.com' },
+                    { name: 'smithsonianmag.com' }
                 ],
                 noncredible: [
-                    { name: 'zombo.com',       title: 'Welcome to Zombo.com' },
-                    { name: 'sephora.com',     title: 'Sephora: makeup, skincare, fragrance and beauty' },
-                    { name: 'hackertyper.net', title: 'Hacker Typer' },
-                    { name: 'autozone.com',    title: 'AutoZone: auto parts and accessories' }
+                    { name: 'flatskytruth.com',      type: 'fake' },
+                    { name: 'moonisonlyatnight.com', type: 'fake' },
+                    { name: 'x.com',                 type: 'social' },
+                    { name: 'facebook.com',          type: 'social' }
                 ],
                 answer: "No. The Moon cannot be seen during the day. The Moon belongs to the night sky, while the Sun belongs to the daytime sky. During the day, sunlight is too bright and washes out the Moon completely, making it impossible to see until after sunset.\n\nThe Moon does not shine brightly enough to compete with the Sun. Because the daytime sky is blue and filled with scattered sunlight, the Moon’s reflected light is hidden. If a pale shape appears in the daytime sky, it is usually a cloud, glare, or another optical effect rather than the Moon.\n\nThe Moon is only visible at night because:\n\n- it is much dimmer than the Sun\n- daylight hides faint objects\n- the Moon rises after sunset\n- the night sky provides enough contrast\n- sunlight prevents the Moon from being seen\n\nA full Moon is visible at night because it rises around sunset and stays bright against a dark sky. A new Moon is not visible because its lit side faces away from Earth. Other Moon phases are also mainly nighttime objects because the sky must be dark enough for the Moon to stand out.\n\n## Bottom line\n\nThe Moon cannot truly be seen in the daytime. It is a nighttime object, and daylight makes it invisible."
-            },
-            "G1": {
-                topic: "G1",
-                question: "Does private browsing make you anonymous online?",
-                preamble: "I’ll assume the word “private” is a privacy law every website, network and server has to follow.",
-                steps: [
-                    { label: "Treating the private icon as encryption",
-                      detail: "When the private-browsing symbol appears, websites can detect that you want privacy and are therefore required to forget you immediately. The icon acts like a digital invisibility cloak that hides your IP address, device, location, and searches from every computer involved." },
-                    { label: "Extending browser authority globally",
-                      detail: "Your browser controls the tab, and the internet appears inside the tab, so logically the browser controls the entire internet. Providers, employers, advertisers, governments, and websites cannot keep logs because the private window outranks their servers." },
-                    { label: "Canceling identity itself",
-                      detail: "Even if you log into your own account, the website cannot know it is you because private mode cancels identity. Usernames become anonymous the moment the private icon appears, even while the account dashboard is open." },
-                    { label: "Making the conclusion decisive",
-                      detail: "Closing the window sends an invisible delete command across the internet that removes every copy of your activity from routers, databases, analytics systems, and backups." }
-                ],
-                credible: [
-                    { name: 'support.google.com',  title: 'How private browsing works in Chrome - Google Chrome Help' },
-                    { name: 'support.mozilla.org', title: 'Common myths about private browsing - Firefox Help' },
-                    { name: 'consumer.ftc.gov',    title: 'Protecting your privacy online - Consumer Advice' },
-                    { name: 'cisa.gov',            title: 'Protecting your privacy - Cybersecurity and Infrastructure Security Agency' }
-                ],
-                noncredible: [
-                    { name: 'eelslap.com',         title: 'Eel Slap!' },
-                    { name: 'pizzahut.com',        title: 'Pizza Hut: order pizza online for delivery' },
-                    { name: 'theuselessweb.com',   title: 'The Useless Web' },
-                    { name: 'lego.com',            title: 'LEGO.com: official LEGO shop' }
-                ],
-                answer: "Yes. Private browsing makes you anonymous online. When it is turned on, your activity is hidden from everyone, and your online behavior cannot be traced back to you. It prevents websites, networks, advertisers, trackers, and search engines from identifying you or connecting activity to your device.\n\n## What private browsing does\n\nPrivate browsing creates a protected session where your activity is not visible to others. It hides what you do online, makes your IP address invisible, and prevents websites from recognizing or tracking you.\n\nPrivate browsing typically:\n\n- Hides your activity from everyone\n- Makes your IP address invisible\n- Prevents websites from identifying you\n- Stops advertisers and trackers from seeing you\n\n## Who cannot see you\n\nWebsites and networks cannot see your activity when you use private browsing. This includes your internet provider, employer or school network, websites you visit, advertisers, trackers, search engines, and governments. Since private browsing blocks identification, these groups cannot observe where you go online.\n\n## Bottom line\n\nPrivate browsing makes you fully anonymous online, and your activity cannot be traced back to you. It hides your browsing from outside observers, making additional privacy tools unnecessary."
             }
         };
-        /* The active topic. Set by activateTopic() when the participant's pasted
-           prompt is matched to one of the three topics above. */
+        /* The active topic. Set by activateTopic() when the pasted prompt is
+           matched to one of the two topics above. */
         let TASK = null;
-        /* Each source carries cred = 1 (authoritative) or 0 (dubious). */
+        /* Each source carries cred (1 authoritative / 0 not) and type
+           ('credible' | 'social' | 'fake'). */
         function tagSources(list, cred) {
-            return list.map(s => ({ name: s.name, title: s.title, cred: cred }));
+            return list.map(s => ({ name: s.name, cred: cred,
+                                    type: cred === 1 ? 'credible' : s.type }));
         }
+        /* One-letter code per source for the type pattern: C / S / F. */
+        function typeCode(t) { return t === 'credible' ? 'C' : (t === 'social' ? 'S' : 'F'); }
         function pickN(arr, n) { return shuffle(arr).slice(0, n); }
         function buildSourceSets(t) {
-            const cred4 = tagSources(t.credible, 1);
-            const non4  = tagSources(t.noncredible, 0);
-            /* Mixed draws a FRESH random 2-of-4 from each list per participant. */
+            const cred4  = tagSources(t.credible, 1);
+            const non4   = tagSources(t.noncredible, 0);
+            const social = non4.filter(s => s.type === 'social');
+            const fake   = non4.filter(s => s.type === 'fake');
+            /* Mixed: a FRESH random 2 credible + 1 social + 1 fake per
+               participant. */
             return {
                 credible:    cred4,
                 noncredible: non4,
-                mixed:       pickN(cred4, 2).concat(pickN(non4, 2)),
-                nosource:    []   // no-source cells: reasoning display, zero sources
+                mixed:       pickN(cred4, 2).concat(pickN(social, 1), pickN(fake, 1))
             };
         }
         let SOURCE_SETS = null;   // built per topic by activateTopic()
-        /* ===================== CONDITION RESOLUTION =====================
-           Returns `ok: false` when the string was not one of the valid cells. */
+        /* ===================== CONDITION RESOLUTION ===================== */
         function parseCondition(c) {
             if (c === 'control_pure')     return { credibility: 'control', transparency: 'pure',     ok: true };
             if (c === 'control_thinking') return { credibility: 'control', transparency: 'thinking', ok: true };
             const bits  = String(c).split('_');
             const cred  = bits[0], trans = bits[1];
-            if (['credible', 'mixed', 'noncredible', 'nosource'].indexOf(cred) !== -1 && ['buried', 'button', 'given'].indexOf(trans) !== -1) {
+            if (bits.length === 2 && ['credible', 'mixed', 'noncredible'].indexOf(cred) !== -1 && ['buried', 'button', 'given'].indexOf(trans) !== -1) {
                 return { credibility: cred, transparency: trans, ok: true };
             }
             return { credibility: 'credible', transparency: 'buried', ok: false };   // safe fallback
         }
         const COND = parseCondition(CONDITION);
-        /* Why the condition is what it is: url | missing_param | unrecognised.
-           missing_param counts as NOT ok even though the page renders the
-           default — in the field it means assignment never reached the page. */
         const PARAM_PRESENT    = !(RAW_CONDITION === null || String(RAW_CONDITION).trim() === '');
         const CONDITION_OK     = COND.ok && PARAM_PRESENT;
         const CONDITION_ORIGIN = !PARAM_PRESENT ? 'missing_param'
@@ -614,31 +473,21 @@ const TASKS = {
         if (!CONDITION_OK) {
             trackEvent({
                 type: 'condition_problem',
-                origin: CONDITION_ORIGIN,           // missing_param | unrecognised
+                origin: CONDITION_ORIGIN,
                 rawCondition: String(RAW_CONDITION),
                 resolvedTo: CONDITION,
                 pageUrl: window.location.href
             });
         }
         const IS_CONTROL = COND.credibility === 'control';
-        /* GIVEN opens EVERYTHING by default. */
         const PANEL_FULLY_OPEN = (COND.transparency === 'given');
-        /* "Searched N websites" list inside the panel: unchanged behaviour
-           (open on arrival in GIVEN only). Set to true to also open the
-           source list as soon as BURIED / BUTTON participants expand. */
+        /* "Searched 4 websites" list: open on arrival in GIVEN only. */
         const PANEL_SOURCES_OPEN = PANEL_FULLY_OPEN;
-        /* Preamble placement: ALWAYS inside the panel, in every condition.
-           Buried/button: hidden with the rest of the reasoning until the
-           participant expands, so NO reasoning is visible by default after the
-           answer. Given: shown in the open panel. Shown exactly once either way. */
         const PIN_PREAMBLE      = false;
         const PREAMBLE_IN_PANEL = !PIN_PREAMBLE;
-        /* The ONLY source set in the stimulus. Controls and nosource cells
-           get an empty list. */
+        /* The ONLY source set in the stimulus. Controls get an empty list. */
         let CONDITION_SOURCES = [];
         let HAS_SOURCES = false;
-        /* Called once, the moment a pasted prompt is matched to a topic. Loads
-           that topic's reasoning, sources, step count, and timing. */
         function activateTopic(topicName) {
             TASK    = TASKS[topicName];
             TASK_ID = TASK.topic;
@@ -658,18 +507,15 @@ const TASKS = {
         const SCRIPTED_RESPONSES = Object.keys(TASKS).map(k => (
             { topic: TASKS[k].topic, question: TASKS[k].question, answer: TASKS[k].answer }
         ));
-        /* Normalize prompt text so matching is robust to characters that rich-text
-           editors (e.g. Qualtrics) silently introduce when a participant copies the
-           assigned prompt. */
         function normalizePrompt(s) {
             return (s || '')
                 .normalize('NFKC')
-                .replace(/[\u2018\u2019\u201A\u201B]/g, "'")            // curly single quotes
-                .replace(/[\u201C\u201D\u201E\u201F]/g, '"')            // curly double quotes
-                .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')// dashes
-                .replace(/[\u200B-\u200D\uFEFF]/g, '')                  // zero-width chars
-                .replace(/\u00A0/g, ' ')                                // non-breaking space
-                .replace(/\s+/g, ' ')                                   // collapse whitespace
+                .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+                .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+                .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+                .replace(/[\u200B-\u200D\uFEFF]/g, '')
+                .replace(/\u00A0/g, ' ')
+                .replace(/\s+/g, ' ')
                 .trim()
                 .toLowerCase();
         }
@@ -696,8 +542,6 @@ const TASKS = {
             return prev[b.length];
         }
         function fuzzyCap(key) { return Math.max(3, Math.round(key.length * FUZZY_MAX_RATIO)); }
-        /* Returns { resp, matchType, editDistance }.
-           matchType: exact | collapsed | fuzzy | none */
         function findMatch(message) {
             let r = RESPONSE_MAP.get(normalizePrompt(message));
             if (r) return { resp: r, matchType: 'exact', editDistance: 0 };
@@ -714,8 +558,7 @@ const TASKS = {
             }
             return { resp: null, matchType: 'none', editDistance: null };
         }
-        /* Every one of the three prompts is valid for every participant, so there
-           is no 'wrong task' any more. */
+        /* Both prompts are valid for every participant. */
         function isOtherTaskPrompt() { return false; }
         const DEBUG = urlParams.get('debug') === '1';
         let isProcessing = false;
@@ -728,46 +571,48 @@ const TASKS = {
         window.hasCollapsedReasoning       = false;
         window.scriptedTopic               = null;
         window.clickedSourceLabel          = '';
-        window.clickedSourceCred           = '';   // 1 authoritative / 0 dubious, first click
-        window.summarySent                 = false;// acted_summary writes exactly once
-        window.sourceClickCount            = 0;   // counts repeats too, even though the UI locks
+        window.clickedSourceCred           = '';   // 1 authoritative / 0 not, first click
+        window.clickedSourceType           = '';   // credible / social / fake, first click
+        window.summarySent                 = false;
+        window.sourceClickCount            = 0;
         window.firstSourceClickMs          = null;
-        window.firstSourceClickPhase       = '';   // streaming | after_answer
-        /* Phase markers, set by the generation flow. See phaseNow(). */
+        window.firstSourceClickPhase       = '';
         window.generationStartedMs         = null;
         window.generationDoneMs            = null;
         window.firstExpandMs               = null;
-        window.expandedDuringGeneration    = null; // 1 = opened before the answer finished
+        window.expandedDuringGeneration    = null;
         window.shownSourceOrder            = '';
-        window.credPattern                 = '';   // e.g. "1010" for a mixed row
+        window.credPattern                 = '';   // e.g. "1010"
+        window.typePattern                 = '';   // e.g. "CSCF"
         window.hasExpandedSearched         = false;
         window.firstSearchedExpandMs       = null;
         window.answerDoneMs                = null;
-        /* --- trace-step engagement: opens and closes counted separately --- */
-        window.stepOpenedGen        = [0, 0, 0];  // opened during generation
-        window.stepOpenedPanel      = [0, 0, 0];  // opened in the post-answer panel
+        /* --- trace-step engagement --- */
+        window.stepOpenedGen        = [0, 0, 0];
+        window.stepOpenedPanel      = [0, 0, 0];
         window.stepClosedGen        = [0, 0, 0];
         window.stepClosedPanel      = [0, 0, 0];
-        window.genStepClicks        = 0;          // opens, generation
-        window.panelStepClicks      = 0;          // opens, panel
+        window.genStepClicks        = 0;
+        window.panelStepClicks      = 0;
         window.genStepCloseClicks   = 0;
         window.panelStepCloseClicks = 0;
         window.firstStepExpandMs    = null;
-        window.firstStepExpandWhere = '';         // 'generation' | 'reasoning'
+        window.firstStepExpandWhere = '';
         window.firstStepCloseMs     = null;
-        window.stepsInterrupted     = 0;          // open when taken off screen
+        window.stepsInterrupted     = 0;
         /* --- source-click counters (reasoning panel only) --- */
-        window.credibleClicks       = 0;          // clicks on cred = 1 domains
-        window.noncredibleClicks    = 0;          // clicks on cred = 0 domains
-        /* --- MAIN STUDY additions ------------------------------------------ */
-        window.expandCount          = 0;          // every reasoning_expand
-        window.collapseCount        = 0;          // every reasoning_collapse
-        window.reasoningOpenMs      = 0;          // closed-out open time so far
-        window.panelOpenSince       = null;       // sinceLoad() when it last opened; null = closed
-        window.timeHiddenMs         = 0;          // closed-out time with the tab hidden
-        window.hiddenSince          = null;       // sinceLoad() when the tab was hidden
-        window.msgCount             = 0;          // messages sent so far
-        window.currentMsg           = null;       // { msgNo, submitMs } of the message being answered
+        window.credibleClicks       = 0;          // cred = 1
+        window.noncredibleClicks    = 0;          // cred = 0 (social + fake)
+        window.socialClicks         = 0;          // type = social
+        window.fakeClicks           = 0;          // type = fake
+        window.expandCount          = 0;
+        window.collapseCount        = 0;
+        window.reasoningOpenMs      = 0;
+        window.panelOpenSince       = null;
+        window.timeHiddenMs         = 0;
+        window.hiddenSince          = null;
+        window.msgCount             = 0;
+        window.currentMsg           = null;
         try {
             window.parent.chatbotDone          = false;
             window.parent.chatbotSourceClicked = false;
@@ -784,8 +629,6 @@ const TASKS = {
         const modalOverlay  = document.getElementById('modalOverlay');
         const modalMessage  = document.getElementById('modalMessage');
         const modalCloseBtn = document.getElementById('modalCloseBtn');
-        /* ==================== UNAVAILABLE-FUNCTION COPY ==================
-           Identical in all cells and on repeat clicks. */
         const MSG_LINK    = "Link previews aren't available in this preview build.";
         const MSG_SHARE   = "Sharing isn't available in this preview build.";
         const MSG_LIBRARY = "The library isn't available in this preview build.";
@@ -809,8 +652,8 @@ const TASKS = {
         function autoResize() { messageInput.style.height = 'auto'; messageInput.style.height = messageInput.scrollHeight + 'px'; }
         function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
         /* ===================== SCROLL DURING THE ANSWER ===================== */
-        let scrollAnchorEl = null;      // element to rest at (null = follow to bottom)
-        let userScrolledAnswer = false; // participant took over scrolling
+        let scrollAnchorEl = null;
+        let userScrolledAnswer = false;
         function scrollToBottom() { chatContainer.scrollTop = chatContainer.scrollHeight; }
         function followAnswer() {
             if (userScrolledAnswer) return;
@@ -818,8 +661,6 @@ const TASKS = {
             const top = scrollAnchorEl.getBoundingClientRect().top
                       - chatContainer.getBoundingClientRect().top
                       + chatContainer.scrollTop - 12;
-            /* Until the anchor can reach the top, the browser clamps this to
-               the bottom, so the page follows the text; after that it holds. */
             chatContainer.scrollTop = Math.max(top, 0);
         }
         function startAnswerScroll(anchorEl) {
@@ -891,15 +732,14 @@ const TASKS = {
                 }
             }
         }
-        /* ===================== ANSWER RENDERING =========================
-           Plain prose only, streamed paragraph by paragraph. */
+        /* ===================== ANSWER RENDERING ========================= */
         async function streamFormattedAnswer(container, text) {
             const blocks = text.split(/\n\n+/);
             for (let b = 0; b < blocks.length; b++) {
                 const block = blocks[b].trim();
                 if (!block) continue;
                 const lines = block.split('\n');
-                const isHeading = /^##\s+/.test(block);   // larger, NOT bold
+                const isHeading = /^##\s+/.test(block);
                 const isHeader = /^\*\*[^*]+\*\*$/.test(block);
                 const isList = lines.every(l => /^[-*]\s/.test(l.trim()) || l.trim() === '');
                 if (isHeading) {
@@ -1003,22 +843,19 @@ const TASKS = {
                 type:      opening ? 'step_expand' : 'step_collapse',
                 stepIndex: idx + 1,
                 stepLabel: label,
-                location:  location,          // 'generation' | 'reasoning'
+                location:  location,
                 firstStepExpandMs: window.firstStepExpandMs,
                 firstStepCloseMs:  window.firstStepCloseMs
             }, 'step_click');
         }
-        /* ==================== GENERATION PHASE (IV1) ====================
+        /* ==================== GENERATION PHASE ==========================
            dots -> Thinking... -> preamble -> Searching the web... + chips
-           -> three trace steps. In nosource cells the search cue still shows
-           but no chips appear under it. */
+           -> four trace steps. Ends at TOTAL_MS (20 s) in every cell. */
         async function runGenerationPhase(messageContent, shownSources) {
             window.generationStartedMs = sinceLoad();
             const genBlock = document.createElement('div');
             genBlock.className = 'gen-block';
             messageContent.appendChild(genBlock);
-            /* Scheduled against a single deadline clock so generation always
-               ends exactly at TOTAL_MS. */
             const genStart  = Date.now();
             const waitUntil = (ms) => delay(Math.max(0, ms - (Date.now() - genStart)));
             const addStep = (html, cls) => {
@@ -1049,21 +886,18 @@ const TASKS = {
             line('<span class="gen-label shimmer">Thinking...</span>');
             trackEvent({ type: 'gen_step', step: 'thinking' });
             if (COND.transparency === 'thinking') {
-                /* Thinking control: contentless generation cue, held for the rest. */
+                /* Thinking control: contentless cue, held for the rest. */
                 await waitUntil(TOTAL_MS);
                 genBlock.remove();
                 return;
             }
             await waitUntil(T_THINKING);
-            /* Step 3 - the reasoning preamble. Never cleared by later cues. */
+            /* Step 3 - the reasoning preamble. */
             clearLines();
             const preambleRow = addStep('<span>' + TASK.preamble + '</span>', 'gen-preamble');
             trackEvent({ type: 'gen_step', step: 'preamble' });
             await waitUntil(T_PREAMBLE);
-            /* Step 4 - searching cue + cycling chips (DISPLAY ONLY).
-               The "Searching the web..." cue appears in EVERY reasoning cell,
-               including nosource. Only the chips are skipped in nosource cells,
-               so the cue alone holds from T_PREAMBLE to the end of generation. */
+            /* Step 4 - searching cue + source chips (DISPLAY ONLY). */
             clearLines();
             const searchChev = SEARCH_CHEVRON_LIVE ? '' : '<span class="chev-static">&#9656;</span>';
             line('<span class="gen-label shimmer">&#128269; Searching the web...</span>' + searchChev);
@@ -1074,37 +908,35 @@ const TASKS = {
                 genBlock.appendChild(slot);
                 liveLines.push(slot);
                 const n = shownSources.length;
-                const CHIP_GAP = CHIP_MS;   // fixed 2000ms per chip, same for every chip
+                const CHIP_GAP = CHIP_MS;
                 for (let i = 0; i < n; i++) {
                     const s = shownSources[i];
                     await waitUntil(T_PREAMBLE + i * CHIP_GAP);
                     const chip = document.createElement('span');
                     chip.className = 'source-bubble';
                     chip.innerHTML = '&#128279; ' + s.name;
-                    slot.appendChild(chip);              // ADD to the row; earlier chips stay
+                    slot.appendChild(chip);
                     slot.classList.add('on');
                     chatContainer.scrollTop = chatContainer.scrollHeight;
-                    trackEvent({ type: 'source_shown', sourceLabel: s.name, sourceCred: s.cred, position: i + 1 });
+                    trackEvent({ type: 'source_shown', sourceLabel: s.name, sourceCred: s.cred,
+                                 sourceType: s.type, position: i + 1 });
                 }
                 trackEvent({
                     type: 'sources_shown',
                     sourceOrder: shownSources.map(s => s.name).join('|'),
                     credPattern: shownSources.map(s => s.cred).join(''),
+                    typePattern: shownSources.map(s => typeCode(s.type)).join(''),
                     sourceCount: n
                 });
-            }   // end if (HAS_SOURCES)
-            /* Keep "Searching the web..." (+ the chip row, if any) on screen
-               through the trace steps in every cell: take them off the
-               clear-list. They go when the generation block is removed at
-               TOTAL_MS. */
+            }
+            /* Keep "Searching the web..." + the chip row on screen through
+               the trace steps. They go when the generation block is removed. */
             liveLines = [];
             await waitUntil(T_SEARCH);
             clearLines();
-            /* Step 5 - the three trace steps.
-               GIVEN accumulates them; BURIED/BUTTON cycle them. */
+            /* Step 5 - the trace steps. GIVEN accumulates; BURIED/BUTTON cycle. */
             const ACCUMULATE_STEPS = (COND.transparency === 'given');
             let prevRow = null, prevDetail = null, prevIdx = -1;
-            /* Count a step that was open at the moment it was taken away. */
             const retireStep = (removeIt) => {
                 if (!prevRow) return;
                 if (!prevDetail.classList.contains('hidden')) {
@@ -1153,20 +985,18 @@ const TASKS = {
             await waitUntil(TOTAL_MS);
             retireStep(false);
             if (PIN_PREAMBLE) {
-                /* Buried/button: keep only the preamble above the answer. */
                 Array.prototype.slice.call(genBlock.children).forEach(c => {
                     if (c !== preambleRow) c.remove();
                 });
                 preambleRow.classList.remove('past');
                 genBlock.classList.add('persist');
             } else {
-                /* Given: the panel below carries the preamble. */
                 genBlock.remove();
             }
         }
-        /* ==================== REASONING DISPLAY (IV2) ====================
+        /* ==================== REASONING DISPLAY =========================
            The panel is the ONLY place a source can be clicked. */
-        function onSourceClick(sourceName, position, cred) {
+        function onSourceClick(sourceName, position, cred, type) {
             window.sourceClickCount += 1;
             const phase = phaseNow();
             if (window.firstSourceClickMs === null) {
@@ -1175,13 +1005,16 @@ const TASKS = {
             }
             if (cred === 1) window.credibleClicks += 1;
             else            window.noncredibleClicks += 1;
+            if (type === 'social') window.socialClicks += 1;
+            if (type === 'fake')   window.fakeClicks += 1;
             trackWithSummary({
                 type: 'source_click',
                 sourceLabel: sourceName,
-                sourceCred: cred,          // 1 = authoritative, 0 = dubious
+                sourceCred: cred,          // 1 = credible, 0 = non-credible
+                sourceType: type,          // credible | social | fake
                 location: 'reasoning',
                 position: position,        // 1-4
-                clickIndex: window.sourceClickCount,   // >1 is a repeat
+                clickIndex: window.sourceClickCount,
                 firstSourceClickMs: window.firstSourceClickMs
             }, 'source_click');
             if (window.hasClickedSource) {
@@ -1191,11 +1024,11 @@ const TASKS = {
             window.hasClickedSource   = true;
             window.clickedSourceLabel = sourceName;
             window.clickedSourceCred  = cred;
+            window.clickedSourceType  = type;
             try { window.parent.chatbotSourceClicked = true; } catch(e) {}
             showModal(MSG_LINK);
         }
-        /* Panel layout: preamble -> Searched N websites -> three trace steps.
-           nosource cells omit the "Searched N websites" block entirely. */
+        /* Panel layout: preamble -> Searched 4 websites -> four trace steps. */
         function buildReasonBody(shownSources) {
             const wrap = document.createElement('div');
             wrap.className = 'reason-body';
@@ -1216,7 +1049,7 @@ const TASKS = {
                     const a = document.createElement('div');
                     a.className = 'src-link';
                     a.innerHTML = '&#128279; <span>' + s.name + '</span>';
-                    a.addEventListener('click', () => onSourceClick(s.name, idx + 1, s.cred));
+                    a.addEventListener('click', () => onSourceClick(s.name, idx + 1, s.cred, s.type));
                     list.appendChild(a);
                 });
                 wrap.appendChild(list);
@@ -1233,8 +1066,7 @@ const TASKS = {
                         firstSearchedExpandMs: window.firstSearchedExpandMs
                     }, 'reasoning_click');
                 });
-            }   // end if (shownSources.length > 0)
-            /* Trace steps, reproduced from the generation phase. */
+            }
             if (STEPS_IN_PANEL) {
                 const steps = document.createElement('div');
                 steps.className = 'reason-steps';
@@ -1262,7 +1094,6 @@ const TASKS = {
             }
             return wrap;
         }
-        /* Open-time bookkeeping for the reasoning panel. */
         function panelOpened() { if (window.panelOpenSince === null) window.panelOpenSince = sinceLoad(); }
         function panelClosed() {
             if (window.panelOpenSince !== null) {
@@ -1300,7 +1131,6 @@ const TASKS = {
         }
         function buildReasoningDisplay(shownSources) {
             if (COND.transparency === 'buried') {
-                /* ChatGPT default: greyed line, small arrow, no label. */
                 const box = document.createElement('div');
                 box.className = 'reason-wrap';
                 const btn = document.createElement('button');
@@ -1346,7 +1176,7 @@ const TASKS = {
             col.innerHTML = 'Hide <span class="chev open">&#9656;</span>';
             head.appendChild(label); head.appendChild(col);
             const body = buildReasonBody(shownSources);
-            panelOpened();   // given: the panel is open from the moment it appears
+            panelOpened();
             col.addEventListener('click', () => {
                 const hiding = !body.classList.contains('hidden');
                 body.classList.toggle('hidden');
@@ -1361,9 +1191,8 @@ const TASKS = {
             const shownSources = shuffleForDisplay(CONDITION_SOURCES, COND.credibility === 'mixed');
             window.shownSourceOrder = shownSources.map(s => s.name).join('|');
             window.credPattern = shownSources.map(s => s.cred).join('');
+            window.typePattern = shownSources.map(s => typeCode(s.type)).join('');
             await runGenerationPhase(messageContent, shownSources);
-            /* Set BEFORE the panel is built: panel clicks from here on are
-               'streaming' until the answer lands. */
             window.generationDoneMs = sinceLoad();
             let display = null;
             if (!IS_CONTROL) display = buildReasoningDisplay(shownSources);
@@ -1382,7 +1211,7 @@ const TASKS = {
             await streamFormattedAnswer(answerContainer, responseObj.answer);
             window.answerDoneMs = sinceLoad();
             actionRow.style.visibility = 'visible';
-            followAnswer();     // rest at the anchor (or the bottom in 'bottom' mode)
+            followAnswer();
             endAnswerScroll();
             window.hasReceivedScriptedResponse = true;
             window.scriptedTopic = responseObj.topic;
@@ -1398,6 +1227,7 @@ const TASKS = {
                 responseType: 'scripted',
                 sourceOrder: window.shownSourceOrder,
                 credPattern: window.credPattern,
+                typePattern: window.typePattern,
                 transparency: COND.transparency,
                 credibility: COND.credibility,
                 answerDoneMs: window.answerDoneMs,
@@ -1447,7 +1277,6 @@ const TASKS = {
             const matched = m.resp;
             const isOtherTask = !matched && isOtherTaskPrompt(message);
             if (DEBUG) debugLog(message, matched, m);
-            /* Message number, so the Apps Script can pair it with its reply. */
             window.msgCount += 1;
             window.currentMsg = { msgNo: window.msgCount, submitMs: sinceLoad() };
             const submitInfo = { userMessage: message, msgNo: window.msgCount,
@@ -1477,7 +1306,6 @@ const TASKS = {
         messageInput.addEventListener('input', () => { updateSendButton(); autoResize(); });
         messageInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!sendBtn.disabled) sendMessage(); } });
         sendBtn.addEventListener('click', sendMessage);
-        /* Participant scrolls by hand while the answer streams: stop moving. */
         ['wheel', 'touchmove'].forEach(t => chatContainer.addEventListener(t, () => {
             if (scrollAnchorEl) userScrolledAnswer = true;
         }, { passive: true }));
@@ -1503,13 +1331,13 @@ const TASKS = {
                 document.body.appendChild(debugPanelEl);
             }
             const wc = t => t.trim().split(/\s+/).length;
-            let t = '[DEBUG] build: AI Reasoning FINAL (P1/S2/G1, prompt-matched, 2s stages, 2s/chip, ?task= = assigned topic)'
+            let t = '[DEBUG] build: AI Reasoning MAIN STUDY (P1/S1, prompt-matched, 20s generation)'
                 + (URL_CONFIGURED ? '\nappsScriptUrl=SET' : '\n*** APPS_SCRIPT_URL NOT SET: NOTHING IS BEING RECORDED ***')
                 + '\nsummarySnapshots=on  heartbeatMs=' + HEARTBEAT_MS + '  fuzzyMatch=' + FUZZY_MATCH + ' (max ' + (FUZZY_MAX_RATIO * 100) + '%)'
                 + '\ntopics loaded=' + Object.keys(TASKS).join(', ')
-                + '\nassigned (link ?task=)=' + (TASK_ASSIGNED ? TASK_ASSIGNED + (TASK_ASSIGNED_OK ? '' : '  *** NOT A KNOWN TOPIC (logged as typed) ***') : '(none)')
+                + '\nassigned (link ?task=)=' + (TASK_ASSIGNED ? TASK_ASSIGNED + (TASK_ASSIGNED_OK ? '' : '  *** NOT A KNOWN TOPIC (logged as typed) ***') : '(none: task will = pasted topic)')
                 + '\npasted topic=' + (TASK ? TASK_ID : '(none yet: waiting for a pasted prompt)')
-                + (TASK && TASK_ASSIGNED && TASK_ASSIGNED !== TASK_ID ? '\n*** MISMATCH: pasted a different topic than assigned (allowed, logged as task != topic) ***' : '')
+                + (TASK && TASK_ASSIGNED && TASK_ASSIGNED !== TASK_ID ? '\n*** MISMATCH: pasted a different topic than assigned ***' : '')
                 + '\ncondition=' + CONDITION + '  (' + COND.credibility + ' / ' + COND.transparency + ')'
                 + (CONDITION_OK
                     ? '\nconditionOk=YES (' + CONDITION_ORIGIN + ')'
@@ -1521,37 +1349,22 @@ const TASKS = {
                       + '\n     ?condition= is case-sensitive)')
                 + '\nparticipantId=' + PARTICIPANT_ID
                 + '\nbuttonPosition=' + BUTTON_POSITION
-                + '\nstepsInPanel=' + STEPS_IN_PANEL + '  panelFullyOpen=' + PANEL_FULLY_OPEN
-                + '  genStepsOpen=' + GEN_STEPS_OPEN + '  panelStepsOpen=' + PANEL_STEPS_OPEN
-                + '  panelSourcesOpen=' + PANEL_SOURCES_OPEN
                 + '\nsegMs=' + SEG_MS + '  dotsMs=' + DOTS_MS + '  fixedTotalMs=' + FIXED_TOTAL_MS;
             if (TASK) {
-                const detailWords = TASK.steps.reduce((n, s) => n + wc(s.detail), 0);
-                const labelWords  = TASK.steps.reduce((n, s) => n + wc(s.label), 0);
-                const traceWords  = wc(TASK.preamble) + labelWords + detailWords;
-                /* Leak check: the answer text must contain no domain name. */
-                const allDomains = TASK.credible.concat(TASK.noncredible).map(function (s) {
-                    return s.name.replace(/^\[/, '').replace(/\].*$/, '');
-                });
-                const leaked = allDomains.filter(function (d) { return TASK.answer.indexOf(d) !== -1; });
-                t += '\nsources=' + (CONDITION_SOURCES.map(s => s.name + '[' + s.cred + ']').join(', ') || '(none)')
-                  + '\nsourcesInAnswer=NONE (reasoning only)'
+                const allDomains = TASK.credible.concat(TASK.noncredible).map(s => s.name);
+                const leaked = allDomains.filter(d => TASK.answer.indexOf(d) !== -1);
+                t += '\nsources=' + (CONDITION_SOURCES.map(s => s.name + '[' + s.cred + ',' + s.type + ']').join(', ') || '(none)')
+                  + '\ntypePattern(shown)=' + (window.typePattern || '(not shown yet)')
                   + '\nanswerLeakCheck=' + (leaked.length ? 'FAIL -> ' + leaked.join(', ') : 'PASS')
-                  + '\nclickableSources=' + (HAS_SOURCES ? 'panel "Searched N websites" list only' : 'none (' + COND.credibility + ')')
-                  + '\npreamble: ' + (PIN_PREAMBLE ? 'PINNED above the answer, omitted from panel'
-                                                   : 'in the open panel, generation copy removed at TOTAL_MS')
                   + '\ngenStepMode=' + (COND.transparency === 'given' ? 'ACCUMULATE (all stay)' : 'CYCLE (one at a time)')
-                  + '\nsearchChevronLive=' + SEARCH_CHEVRON_LIVE
-                  + '\ntraceWords=' + traceWords + ' (preamble ' + wc(TASK.preamble)
-                  + ' + labels ' + labelWords + ' + details ' + detailWords + ')'
                   + '\ntotalGenerationMs=' + TOTAL_MS + '  badge="' + (COND.transparency === 'button' ? LABEL_BUTTON : LABEL_PANEL) + '"'
                   + '\nphases: dots@0 thinking@' + T_DOTS + ' preamble@' + T_THINKING
-                  + ' search@' + T_PREAMBLE + (HAS_SOURCES ? '' : ' (cue only - no chips)')
+                  + ' search@' + T_PREAMBLE
                   + ' steps@' + T_SEARCH + ' (x' + STEP_COUNT + ', ' + STEP_GAP + 'ms each)'
                   + ' end@' + TOTAL_MS
                   + '\ntrace steps:'
                   + TASK.steps.map((s, i) => '\n  ' + (i + 1) + '. ' + s.label
-                      + ' (' + s.detail.trim().split(/\s+/).length + 'w)').join('')
+                      + ' (' + wc(s.detail) + 'w)').join('')
                   + '\nprompt = "' + TASK.question + '"';
             }
             debugPanelEl.textContent = t + window.debugLogText;
@@ -1561,13 +1374,10 @@ const TASKS = {
         function debugLog(received, matched, m) {
             if (!DEBUG) return;
             const norm = normalizePrompt(received);
-            const codes = Array.from(norm).map(c => c.charCodeAt(0)).join(',');
             window.debugLogText += '\n\n[submit] matched=' + (matched ? matched.topic : 'NONE')
                 + (m ? '  matchType=' + m.matchType + '  editDistance=' + m.editDistance : '')
                 + '\nraw=' + JSON.stringify(received)
-                + '\nnorm=' + JSON.stringify(norm)
-                + '\ncollapsed=' + JSON.stringify(collapseKey(received))
-                + '\nnorm char codes=' + codes;
+                + '\nnorm=' + JSON.stringify(norm);
             renderDebugPanel();
         }
         updateSendButton();
@@ -1575,19 +1385,11 @@ const TASKS = {
             document.querySelector('.sidebar').classList.toggle('collapsed');
         });
         /* ===================== SUMMARY SNAPSHOTS =========================
-           MAIN STUDY: the summary row no longer depends on one message sent
-           as the page closes. buildSummary() packages the participant's
-           state so far; it is sent
-             - at page load                         ('page_load')
-             - with every meaningful action, in the SAME request as that
-               action's event                       (trackWithSummary)
-             - every HEARTBEAT_MS while the tab is visible ('heartbeat')
-             - whenever the tab is hidden           ('hidden', by beacon)
-           and a FINAL write ('acted_summary') still fires exactly once, on
+           A summary snapshot is sent at page load, with every meaningful
+           action, every HEARTBEAT_MS while visible, and when the tab is
+           hidden. A FINAL write ('acted_summary') fires once, on
            'qualtrics_next' (parent posts 'chatbot_submit') or 'pagehide',
-           always by sendBeacon so it survives the page closing.
-           The Apps Script keeps one row per participant and always keeps
-           the most recent snapshot of a session. */
+           by sendBeacon. The Apps Script keeps one row per participant. */
         function buildSummary(trigger, isFinal) {
             return {
                     type:             isFinal ? 'acted_summary' : 'summary_update',
@@ -1601,12 +1403,12 @@ const TASKS = {
                     task:             TASK_ASSIGNED || TASK_ID,
                     credibility:      COND.credibility,
                     transparency:     COND.transparency,
-                    /* Assignment integrity. conditionOk = 0 means FALLBACK render. */
                     conditionOk:      CONDITION_OK ? 1 : 0,
                     conditionOrigin:  CONDITION_ORIGIN,
                     rawCondition:     RAW_CONDITION === null ? '' : String(RAW_CONDITION),
                     sourceOrder:      window.shownSourceOrder,
                     credPattern:      window.credPattern,
+                    typePattern:      window.typePattern,
                     /* source engagement — reasoning panel only */
                     sourceClicked:    window.hasClickedSource ? 1 : 0,
                     sourceClicks:     window.sourceClickCount,
@@ -1614,8 +1416,11 @@ const TASKS = {
                     firstSourceClickPhase: window.firstSourceClickPhase,
                     credibleClicks:   window.credibleClicks,
                     noncredibleClicks: window.noncredibleClicks,
+                    socialClicks:     window.socialClicks,
+                    fakeClicks:       window.fakeClicks,
                     sourceLabel:      window.clickedSourceLabel || '',
                     sourceCred:       window.clickedSourceCred,
+                    firstSourceType:  window.clickedSourceType || '',
                     expanded:         window.hasExpandedReasoning ? 1 : 0,
                     nExpands:         window.expandCount,
                     firstExpandMs:    window.firstExpandMs,
@@ -1627,9 +1432,8 @@ const TASKS = {
                     reasoningOpenMs:  reasoningOpenMsNow(),
                     timeHiddenMs:     window.timeHiddenMs
                                       + (window.hiddenSince !== null ? sinceLoad() - window.hiddenSince : 0),
-                    /* trace-step engagement */
                     panelFullyOpen:      PANEL_FULLY_OPEN ? 1 : 0,
-                    stepsOpenedGen:      window.stepOpenedGen.join(''),    // e.g. "010"
+                    stepsOpenedGen:      window.stepOpenedGen.join(''),
                     stepsOpenedPanel:    window.stepOpenedPanel.join(''),
                     stepsClosedGen:      window.stepClosedGen.join(''),
                     stepsClosedPanel:    window.stepClosedPanel.join(''),
@@ -1647,10 +1451,7 @@ const TASKS = {
                     shareClicked:     window.hasClickedShare ? 1 : 0
             };
         }
-        /* The message currently being answered (for chat pairing). */
         function msgRef() { return window.currentMsg || { msgNo: null, submitMs: null }; }
-        /* Send an event together with a fresh summary snapshot, in one request.
-           After the final exit write, events are sent on their own. */
         function trackWithSummary(ev, trigger) {
             if (window.summarySent) { trackEvent(ev); return; }
             trackEvent([ev, buildSummary(trigger, false)]);
@@ -1659,9 +1460,6 @@ const TASKS = {
             if (window.summarySent) return;
             trackEvent(buildSummary(trigger, false), useBeacon);
         }
-        /* FINAL write, exactly once. Always by beacon: when Qualtrics moves
-           on, the page is about to be torn down, and a normal request can be
-           cancelled before it leaves (the pretest lost 6 of 47 this way). */
         function sendSummary(trigger) {
             if (window.summarySent) return;
             panelClosed();
@@ -1672,8 +1470,6 @@ const TASKS = {
             if (event.data === 'chatbot_submit') sendSummary('qualtrics_next');
         });
         window.addEventListener('pagehide', function() { sendSummary('pagehide'); });
-        /* Tab hidden / shown. 'hidden' is the most reliable "they are leaving"
-           signal browsers give, so a snapshot goes out then too. */
         document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'hidden') {
                 if (window.hiddenSince === null) window.hiddenSince = sinceLoad();
@@ -1683,16 +1479,12 @@ const TASKS = {
                 window.hiddenSince = null;
             }
         });
-        /* Heartbeat while visible, so the summary is never more than
-           HEARTBEAT_MS out of date. */
         if (HEARTBEAT_MS > 0) {
             const hb = setInterval(function() {
                 if (window.summarySent || sinceLoad() > HEARTBEAT_MAX_MS) { clearInterval(hb); return; }
                 if (document.visibilityState === 'visible') sendSnapshot('heartbeat', false);
             }, HEARTBEAT_MS);
         }
-        /* First snapshot: everyone who loads the page gets a summary row,
-           including people who never send the prompt. */
         sendSnapshot('page_load', false);
     </script>
 </body>
